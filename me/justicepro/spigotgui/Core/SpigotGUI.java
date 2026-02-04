@@ -2305,6 +2305,7 @@ public class SpigotGUI extends JFrame {
 			public void actionPerformed(ActionEvent e) {
 				try {
 					InstructionWindow window = new InstructionWindow();
+					window.setLocationRelativeTo(SpigotGUI.this);
 					window.setVisible(true);
 				} catch (Exception e1) {
 					e1.printStackTrace();
