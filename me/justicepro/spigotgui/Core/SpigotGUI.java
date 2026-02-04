@@ -1,13 +1,15 @@
 package me.justicepro.spigotgui.Core;
 
+import java.awt.BorderLayout;
 import java.awt.Component;
-import java.awt.Desktop;
+import java.awt.Dimension;
 import java.awt.EventQueue;
 import java.awt.Font;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.awt.event.ComponentAdapter;
-import java.awt.event.ComponentEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
@@ -19,7 +21,6 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Inet4Address;
-import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
@@ -40,6 +41,8 @@ import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.DefaultListCellRenderer;
+import javax.swing.Icon;
 import javax.swing.JList;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
@@ -58,6 +61,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import javax.swing.UnsupportedLookAndFeelException;
 import javax.swing.border.EmptyBorder;
+import javax.swing.border.TitledBorder;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import javax.swing.event.PopupMenuEvent;
@@ -91,6 +95,9 @@ import me.justicepro.spigotgui.Utils.Player;
 
 public class SpigotGUI extends JFrame {
 
+	private static final int MIN_SIZE_BASE_WIDTH = 650;
+	private static final int MIN_SIZE_BASE_HEIGHT = 400;
+
 	private JPanel contentPane;
 	private JTextField inputTxt;
 
@@ -106,6 +113,12 @@ public class SpigotGUI extends JFrame {
 	private JLabel lblStatus;
 
 	private JComboBox<String> themeBox;
+	/** Theme at app startup; used to decide if we can apply a new theme without restart (same family only). */
+	private static Theme initialThemeForSession;
+	/** Fixed size for theme label so it never changes when toggling text (avoids layout shift). */
+	private static int themeLabelWidth = 0;
+	private static int themeLabelHeight = 0;
+	private JLabel lblTheme;
 
 	public static Server server = null;
 
@@ -140,13 +153,15 @@ public class SpigotGUI extends JFrame {
 	private JCheckBox chckbxConsoleForsay;
 	private JCheckBox consoleDarkModeCheckBox;
 	private JCheckBox disableConsoleColorsCheckBox;
+	private JCheckBox openFilesInSystemDefaultCheckBox;
+	private JComboBox<String> fileEditorThemeBox;
+	private FileModel fileModel;
 
 	public static File jarFile;
 
 	public static ServerHandler serverHandler = new ServerHandler();
 
 	public static final String versionTag = "1.1.1";
-	public static final String versionName = "2026";
 
 	//public static ServerSettings serverSettings;
 
@@ -181,18 +196,11 @@ public class SpigotGUI extends JFrame {
 	 */
 	public SpigotGUI(Settings settings) throws IOException, ClassNotFoundException, InstantiationException, IllegalAccessException, UnsupportedLookAndFeelException {
 		ServerSettings serverSettings = settings.getServerSettings();
-		
-		
-		addComponentListener(new ComponentAdapter() {
-
-			@Override
-			public void componentResized(ComponentEvent arg0) {
-
-			}
-
-		});
+		if (initialThemeForSession == null) {
+			initialThemeForSession = settings.getTheme();
+		}
 		//setIconImage(ImageIO.read(getClass().getResourceAsStream("/spigotgui.png")));
-		setTitle("SpigotGUI Remastered (" + versionTag + " \"" + versionName + "\")");
+		setTitle("SpigotGUI Remastered (" + versionTag + ")");
 		module = new ModuleCore();
 		module.init();
 		ModuleManager.registerModule(module);
@@ -217,7 +225,7 @@ public class SpigotGUI extends JFrame {
 
 				String theme = themeBox.getItemAt(themeBox.getSelectedIndex());
 				
-				Settings s = new Settings(new ServerSettings(minRam.getValue(), maxRam.getValue(), customArgsTxt.getText(), customSwitchesTxt.getText(), jarFile), settings.getTheme(), fontSpinner.getValue(), consoleDarkModeCheckBox.isSelected(), !disableConsoleColorsCheckBox.isSelected());
+				Settings s = new Settings(new ServerSettings(minRam.getValue(), maxRam.getValue(), customArgsTxt.getText(), customSwitchesTxt.getText(), jarFile), settings.getTheme(), fontSpinner.getValue(), consoleDarkModeCheckBox.isSelected(), !disableConsoleColorsCheckBox.isSelected(), openFilesInSystemDefaultCheckBox.isSelected(), getFileEditorThemeFromBox());
 				
 				for (Theme t : Theme.values()) {
 
@@ -241,8 +249,8 @@ public class SpigotGUI extends JFrame {
 			}
 		});
 		setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
-		setBounds(100, 100, 672, 591);
-		// setBounds(100, 100, 642, 508);
+		setBounds(100, 100, 700, 600);
+		setMinimumSize(new Dimension(MIN_SIZE_BASE_WIDTH, MIN_SIZE_BASE_HEIGHT));
 		contentPane = new JPanel();
 		contentPane.setBorder(new EmptyBorder(5, 5, 5, 5));
 		setContentPane(contentPane);
@@ -269,6 +277,10 @@ public class SpigotGUI extends JFrame {
 		scrollPane.setViewportView(consoleTextPane);
 
 		inputTxt = new JTextField();
+		inputTxt.setFont(consoleFont);
+		inputTxt.setMargin(new Insets(4, 6, 4, 6));
+		inputTxt.setPreferredSize(new Dimension(inputTxt.getPreferredSize().width, 26));
+		inputTxt.setMinimumSize(new Dimension(60, 26));
 		inputTxt.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent arg0) {
 
@@ -479,6 +491,7 @@ public class SpigotGUI extends JFrame {
 		lblStatus = new JLabel("Status: Offline");
 		
 		chckbxConsoleForsay = new JCheckBox("Console for /say");
+		chckbxConsoleForsay.setToolTipText("When checked, your console input is sent as \"say <text>\", so it appears as a server message in game chat. When unchecked, input is sent as a raw command.");
 		GroupLayout gl_panel = new GroupLayout(panel);
 		gl_panel.setHorizontalGroup(
 			gl_panel.createParallelGroup(Alignment.LEADING)
@@ -514,15 +527,15 @@ public class SpigotGUI extends JFrame {
 					.addPreferredGap(ComponentPlacement.RELATED)
 					.addComponent(scrollPane, GroupLayout.DEFAULT_SIZE, 383, Short.MAX_VALUE)
 					.addPreferredGap(ComponentPlacement.RELATED)
-					.addComponent(inputTxt, GroupLayout.PREFERRED_SIZE, 20, GroupLayout.PREFERRED_SIZE)
+					.addComponent(inputTxt, GroupLayout.PREFERRED_SIZE, 26, GroupLayout.PREFERRED_SIZE)
 					.addPreferredGap(ComponentPlacement.RELATED)
 					.addGroup(gl_panel.createParallelGroup(Alignment.TRAILING)
 						.addGroup(gl_panel.createSequentialGroup()
 							.addGroup(gl_panel.createParallelGroup(Alignment.BASELINE)
-								.addComponent(btnStartServer, GroupLayout.PREFERRED_SIZE, 20, GroupLayout.PREFERRED_SIZE)
-								.addComponent(btnStopServer, GroupLayout.PREFERRED_SIZE, 20, GroupLayout.PREFERRED_SIZE)
-								.addComponent(btnRestartServer, GroupLayout.PREFERRED_SIZE, 20, GroupLayout.PREFERRED_SIZE)
-								.addComponent(exitTimer, GroupLayout.PREFERRED_SIZE, 20, GroupLayout.PREFERRED_SIZE))
+								.addComponent(btnStartServer)
+								.addComponent(btnStopServer)
+								.addComponent(btnRestartServer)
+								.addComponent(exitTimer))
 							.addGap(56))
 						.addGroup(gl_panel.createSequentialGroup()
 							.addGroup(gl_panel.createParallelGroup(Alignment.BASELINE)
@@ -1557,23 +1570,36 @@ public class SpigotGUI extends JFrame {
 
 		JPopupMenu popupMenu = new JPopupMenu();
 		popupMenu.addPopupMenuListener(new PopupMenuListener() {
-			public void popupMenuCanceled(PopupMenuEvent arg0) {
-
-			}
-			public void popupMenuWillBecomeInvisible(PopupMenuEvent arg0) {
-
-			}
+			public void popupMenuCanceled(PopupMenuEvent arg0) {}
+			public void popupMenuWillBecomeInvisible(PopupMenuEvent arg0) {}
 			public void popupMenuWillBecomeVisible(PopupMenuEvent arg0) {
-
-				if (!(table.getSelectedRow()>-1)) {
-					table.setRowSelectionInterval(0, 0);
-				}
-
-				String player = table.getModel().getValueAt(table.getSelectedRow(), 0) + "";
-				mntmPlayerName.setText(player);
+				int row = table.getSelectedRow();
+				if (row < 0) return;
+				Object val = table.getModel().getValueAt(row, 0);
+				String player = (val == null) ? "" : val.toString().trim();
+				mntmPlayerName.setText(player.isEmpty() ? "(no player)" : player);
 			}
 		});
-		addPopup(table, popupMenu);
+		// Only show context menu when right-clicking on a row that has a player name (not empty/null)
+		table.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mousePressed(MouseEvent e) {
+				if (e.isPopupTrigger()) showPlayersPopupIfRowValid(e);
+			}
+			@Override
+			public void mouseReleased(MouseEvent e) {
+				if (e.isPopupTrigger()) showPlayersPopupIfRowValid(e);
+			}
+			private void showPlayersPopupIfRowValid(MouseEvent e) {
+				int row = table.rowAtPoint(e.getPoint());
+				if (row < 0) return;
+				Object val = table.getModel().getValueAt(row, 0);
+				String player = (val == null) ? "" : val.toString().trim();
+				if (player.isEmpty()) return;
+				table.setRowSelectionInterval(row, row);
+				popupMenu.show(table, e.getX(), e.getY());
+			}
+		});
 
 		JMenuItem mntmOp = new JMenuItem("Op");
 		mntmOp.addActionListener(new ActionListener() {
@@ -1852,7 +1878,7 @@ public class SpigotGUI extends JFrame {
 						.addComponent(scrollPane_1, GroupLayout.DEFAULT_SIZE, 430, Short.MAX_VALUE)
 						.addGap(18)
 						.addGroup(gl_panel_1.createParallelGroup(Alignment.BASELINE)
-								.addComponent(btnPardon, GroupLayout.PREFERRED_SIZE, 20, GroupLayout.PREFERRED_SIZE)
+								.addComponent(btnPardon)
 								.addComponent(btnKick)
 								.addComponent(btnBan)
 								.addComponent(btnOp)
@@ -1902,10 +1928,7 @@ public class SpigotGUI extends JFrame {
 		customSwitchesTxt.setText(serverSettings.getCustomSwitches());
 		
 		JLabel lblCustomArgs = new JLabel("Custom Arguments");
-		lblCustomArgs.setHorizontalAlignment(SwingConstants.CENTER);
-
 		JLabel lblCustomSwitches = new JLabel("Custom Switches");
-		lblCustomSwitches.setHorizontalAlignment(SwingConstants.CENTER);
 		
 		JLabel lblJarFile = new JLabel("Server File: server.jar");
 		lblJarFile.setHorizontalAlignment(SwingConstants.LEFT);
@@ -1921,7 +1944,7 @@ public class SpigotGUI extends JFrame {
 
 				fileChooser.setFileFilter(filter);
 
-				int result = fileChooser.showOpenDialog(null);
+				int result = fileChooser.showOpenDialog(SpigotGUI.this);
 
 				if (result==JFileChooser.APPROVE_OPTION) {
 					jarFile = fileChooser.getSelectedFile();
@@ -1931,84 +1954,176 @@ public class SpigotGUI extends JFrame {
 			}
 		});
 		
-		JLabel lblFontSize = new JLabel("Font Size");
-		
+		JLabel lblFontSize = new JLabel("Console font size");
+
+		lblTheme = new JLabel("Theme (may require restart)");
+		themeBox = new JComboBox<String>();
+		themeBox.setModel(new DefaultComboBoxModel<>(new String[] {"Aluminium", "Aero", "Acryl", "Bernstein", "Fast", "Graphite", "HiFi", "Luna", "McWin", "Metal", "Mint", "Motif", "Noire", "Smart", "Texture", "Windows"}));
+		themeBox.setSelectedItem(settings.getTheme().getName());
+		updateThemeLabelFor(settings.getTheme());
+		themeBox.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent arg0) {
+				String themeName = themeBox.getSelectedItem() + "";
+				if (themeName.isEmpty()) return;
+				Theme theme = Theme.valueOf(themeName.replaceAll(" ", "_"));
+				boolean sameFamily = (initialThemeForSession != null && initialThemeForSession.getFamily() == theme.getFamily());
+				if (sameFamily) {
+					try {
+						UIManager.setLookAndFeel(theme.getLookAndFeel());
+						SwingUtilities.updateComponentTreeUI(SpigotGUI.this);
+					} catch (ClassNotFoundException | InstantiationException | IllegalAccessException
+							| UnsupportedLookAndFeelException e) {
+						e.printStackTrace();
+					}
+				}
+				updateThemeLabelFor(theme);
+			}
+		});
+
+		consoleDarkModeCheckBox = new JCheckBox("Console dark mode");
+		consoleDarkModeCheckBox.setSelected(settings.isConsoleDarkMode());
+		consoleDarkModeCheckBox.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				if (consoleStyleHelper != null) {
+					consoleStyleHelper.setDarkMode(consoleDarkModeCheckBox.isSelected());
+				}
+			}
+		});
+
+		disableConsoleColorsCheckBox = new JCheckBox("Disable console colors");
+		disableConsoleColorsCheckBox.setSelected(!settings.isConsoleColorsEnabled());
+		disableConsoleColorsCheckBox.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				if (consoleStyleHelper != null) {
+					consoleStyleHelper.setColorsEnabled(!disableConsoleColorsCheckBox.isSelected());
+				}
+			}
+		});
+
+		openFilesInSystemDefaultCheckBox = new JCheckBox("Open files in system default application");
+		openFilesInSystemDefaultCheckBox.setSelected(settings.isOpenFilesInSystemDefault());
+		openFilesInSystemDefaultCheckBox.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				if (fileModel != null) {
+					fileModel.setOpenInSystemDefault(openFilesInSystemDefaultCheckBox.isSelected());
+				}
+			}
+		});
+
 		JButton btnEditServerproperties = new JButton("Edit Server.Properties");
 		btnEditServerproperties.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent arg0) {
 				FileEditor fileEditor = new FileEditor();
+				fileEditor.setLocationRelativeTo(SpigotGUI.this);
 				try {
 					fileEditor.openFile(new File("server.properties"));
 				} catch (IOException e) {
-					// TODO Auto-generated catch block
 					e.printStackTrace();
 				}
 				fileEditor.setVisible(true);
 			}
 		});
 		
-		GroupLayout gl_panel_2 = new GroupLayout(panel_2);
-		gl_panel_2.setHorizontalGroup(
-			gl_panel_2.createParallelGroup(Alignment.LEADING)
-				.addGroup(gl_panel_2.createSequentialGroup()
-					.addComponent(btnSetJarFile, GroupLayout.PREFERRED_SIZE, 110, GroupLayout.PREFERRED_SIZE)
-					.addPreferredGap(ComponentPlacement.RELATED, 462, Short.MAX_VALUE)
-					.addComponent(btnEditServerproperties))
-				.addComponent(lblJarFile, GroupLayout.PREFERRED_SIZE, 596, GroupLayout.PREFERRED_SIZE)
-				.addGroup(gl_panel_2.createSequentialGroup()
-					.addComponent(lblMinRam, GroupLayout.PREFERRED_SIZE, 100, GroupLayout.PREFERRED_SIZE)
-					.addGap(12)
-					.addComponent(lblCustomArgs, GroupLayout.PREFERRED_SIZE, 218, GroupLayout.PREFERRED_SIZE))
-				.addGroup(gl_panel_2.createSequentialGroup()
-					.addComponent(minRam, GroupLayout.PREFERRED_SIZE, 100, GroupLayout.PREFERRED_SIZE)
-					.addGap(12)
-					.addComponent(customArgsTxt, GroupLayout.PREFERRED_SIZE, 218, GroupLayout.PREFERRED_SIZE))
-				.addGroup(gl_panel_2.createSequentialGroup()
-					.addComponent(lblMaxRam, GroupLayout.PREFERRED_SIZE, 100, GroupLayout.PREFERRED_SIZE)
-					.addGap(12)
-					.addComponent(lblCustomSwitches, GroupLayout.PREFERRED_SIZE, 218, GroupLayout.PREFERRED_SIZE))
-				.addComponent(lblFontSize)
-				.addGroup(gl_panel_2.createSequentialGroup()
-					.addGroup(gl_panel_2.createParallelGroup(Alignment.TRAILING, false)
-						.addComponent(fontSpinner, Alignment.LEADING, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE)
-						.addComponent(maxRam, Alignment.LEADING, GroupLayout.DEFAULT_SIZE, 95, Short.MAX_VALUE))
-					.addGap(17)
-					.addComponent(customSwitchesTxt, GroupLayout.PREFERRED_SIZE, 218, GroupLayout.PREFERRED_SIZE))
-		);
-		gl_panel_2.setVerticalGroup(
-			gl_panel_2.createParallelGroup(Alignment.TRAILING)
-				.addGroup(gl_panel_2.createSequentialGroup()
-					.addGroup(gl_panel_2.createParallelGroup(Alignment.LEADING)
-						.addComponent(lblMinRam, GroupLayout.PREFERRED_SIZE, 16, GroupLayout.PREFERRED_SIZE)
-						.addComponent(lblCustomArgs, GroupLayout.PREFERRED_SIZE, 16, GroupLayout.PREFERRED_SIZE))
-					.addGap(12)
-					.addGroup(gl_panel_2.createParallelGroup(Alignment.LEADING)
-						.addComponent(minRam, GroupLayout.PREFERRED_SIZE, 22, GroupLayout.PREFERRED_SIZE)
-						.addGroup(gl_panel_2.createSequentialGroup()
-							.addGap(1)
-							.addComponent(customArgsTxt, GroupLayout.PREFERRED_SIZE, 20, GroupLayout.PREFERRED_SIZE)))
-					.addGap(12)
-					.addGroup(gl_panel_2.createParallelGroup(Alignment.LEADING)
-						.addComponent(lblMaxRam, GroupLayout.PREFERRED_SIZE, 16, GroupLayout.PREFERRED_SIZE)
-						.addComponent(lblCustomSwitches, GroupLayout.PREFERRED_SIZE, 16, GroupLayout.PREFERRED_SIZE))
-					.addGap(12)
-					.addGroup(gl_panel_2.createParallelGroup(Alignment.LEADING)
-						.addComponent(maxRam, GroupLayout.PREFERRED_SIZE, 22, GroupLayout.PREFERRED_SIZE)
-						.addGroup(gl_panel_2.createSequentialGroup()
-							.addGap(1)
-							.addComponent(customSwitchesTxt, GroupLayout.PREFERRED_SIZE, 20, GroupLayout.PREFERRED_SIZE)))
-					.addPreferredGap(ComponentPlacement.UNRELATED)
-					.addComponent(lblFontSize)
-					.addPreferredGap(ComponentPlacement.RELATED)
-					.addComponent(fontSpinner, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE)
-					.addPreferredGap(ComponentPlacement.RELATED, 307, Short.MAX_VALUE)
-					.addComponent(lblJarFile, GroupLayout.PREFERRED_SIZE, 16, GroupLayout.PREFERRED_SIZE)
-					.addPreferredGap(ComponentPlacement.RELATED)
-					.addGroup(gl_panel_2.createParallelGroup(Alignment.TRAILING)
-						.addComponent(btnSetJarFile, GroupLayout.PREFERRED_SIZE, 20, GroupLayout.PREFERRED_SIZE)
-						.addComponent(btnEditServerproperties)))
-		);
-		panel_2.setLayout(gl_panel_2);
+		// --- Settings layout: scrollable sectioned panels (content does not stretch vertically) ---
+		int pad = 6;
+		JPanel settingsContentInner = new JPanel();
+		settingsContentInner.setLayout(new BoxLayout(settingsContentInner, BoxLayout.Y_AXIS));
+		settingsContentInner.setBorder(new EmptyBorder(10, 10, 10, 10));
+
+		// Section: Server (path + two buttons same width, left-aligned)
+		JPanel serverSection = new JPanel();
+		serverSection.setBorder(new TitledBorder(null, "Server", TitledBorder.LEADING, TitledBorder.TOP));
+		serverSection.setLayout(new GridBagLayout());
+		GridBagConstraints c = new GridBagConstraints();
+		c.insets = new Insets(pad, pad, pad, pad);
+		c.anchor = GridBagConstraints.WEST;
+		c.fill = GridBagConstraints.NONE;
+		c.gridx = 0; c.gridy = 0; c.weightx = 1; serverSection.add(lblJarFile, c);
+		btnEditServerproperties.setPreferredSize(new Dimension(220, btnEditServerproperties.getPreferredSize().height));
+		c.gridy = 1; c.weightx = 0; serverSection.add(btnSetJarFile, c);
+		c.gridx = 1; serverSection.add(btnEditServerproperties, c);
+		settingsContentInner.add(serverSection);
+
+		// Section: JVM / Run options
+		JPanel jvmSection = new JPanel();
+		jvmSection.setBorder(new TitledBorder(null, "JVM / Run options", TitledBorder.LEADING, TitledBorder.TOP));
+		jvmSection.setLayout(new GridBagLayout());
+		c = new GridBagConstraints();
+		c.insets = new Insets(pad, pad, pad, pad);
+		c.anchor = GridBagConstraints.WEST;
+		c.fill = GridBagConstraints.HORIZONTAL;
+		c.gridx = 0; c.gridy = 0; c.weightx = 0; jvmSection.add(lblMinRam, c);
+		c.gridx = 1; c.weightx = 1; jvmSection.add(minRam, c);
+		c.gridy = 1; c.gridx = 0; c.weightx = 0; jvmSection.add(lblMaxRam, c);
+		c.gridx = 1; c.weightx = 1; jvmSection.add(maxRam, c);
+		c.gridy = 2; c.gridx = 0; c.weightx = 0; jvmSection.add(lblCustomArgs, c);
+		c.gridx = 1; c.weightx = 1; jvmSection.add(customArgsTxt, c);
+		c.gridy = 3; c.gridx = 0; c.weightx = 0; jvmSection.add(lblCustomSwitches, c);
+		c.gridx = 1; c.weightx = 1; jvmSection.add(customSwitchesTxt, c);
+		customArgsTxt.setMinimumSize(new Dimension(60, 20));
+		customSwitchesTxt.setMinimumSize(new Dimension(60, 20));
+		settingsContentInner.add(jvmSection);
+
+		// Section: Files (full width like other sections; checkbox left-aligned)
+		JPanel filesSection = new JPanel();
+		filesSection.setBorder(new TitledBorder(null, "Files", TitledBorder.LEADING, TitledBorder.TOP));
+		filesSection.setLayout(new GridBagLayout());
+		c = new GridBagConstraints();
+		c.insets = new Insets(pad, pad, pad, pad);
+		c.anchor = GridBagConstraints.WEST;
+		c.fill = GridBagConstraints.NONE;
+		c.gridx = 0; c.gridy = 0; c.weightx = 0; filesSection.add(openFilesInSystemDefaultCheckBox, c);
+		c.gridx = 1; c.weightx = 1; c.fill = GridBagConstraints.HORIZONTAL; filesSection.add(new JPanel(), c);
+		settingsContentInner.add(filesSection);
+
+		// Section: Appearance (theme, file editor theme, console font size, console options)
+		JPanel appearanceSection = new JPanel();
+		appearanceSection.setBorder(new TitledBorder(null, "Appearance", TitledBorder.LEADING, TitledBorder.TOP));
+		appearanceSection.setLayout(new GridBagLayout());
+		c = new GridBagConstraints();
+		c.insets = new Insets(pad, pad, pad, pad);
+		c.anchor = GridBagConstraints.WEST;
+		c.fill = GridBagConstraints.HORIZONTAL;
+		c.gridx = 0; c.gridy = 0; c.weightx = 0; c.gridwidth = 1; appearanceSection.add(lblTheme, c);
+		c.gridx = 1; c.weightx = 1; appearanceSection.add(themeBox, c);
+		JLabel lblFileEditorTheme = new JLabel("File editor theme");
+		fileEditorThemeBox = new JComboBox<>(new String[] { "default", "default-alt", "dark", "druid", "eclipse", "idea", "monokai", "vs" });
+		fileEditorThemeBox.setSelectedItem(settings.getFileEditorTheme());
+		fileEditorThemeBox.addActionListener(e -> me.justicepro.spigotgui.FileExplorer.FileEditor.setDefaultThemeName(getFileEditorThemeFromBox()));
+		c.gridy = 1; c.gridx = 0; c.weightx = 0; appearanceSection.add(lblFileEditorTheme, c);
+		c.gridx = 1; c.weightx = 1; appearanceSection.add(fileEditorThemeBox, c);
+		c.gridy = 2; c.gridx = 0; c.weightx = 0; appearanceSection.add(lblFontSize, c);
+		c.gridx = 1; c.weightx = 1; appearanceSection.add(fontSpinner, c);
+		c.gridy = 3; c.gridx = 0; c.gridwidth = 2; appearanceSection.add(consoleDarkModeCheckBox, c);
+		c.gridwidth = 1;
+		c.gridy = 4; c.gridx = 0; c.gridwidth = 2; appearanceSection.add(disableConsoleColorsCheckBox, c);
+		minRam.setMinimumSize(new Dimension(50, minRam.getPreferredSize().height));
+		maxRam.setMinimumSize(new Dimension(50, maxRam.getPreferredSize().height));
+		fontSpinner.setMinimumSize(new Dimension(50, fontSpinner.getPreferredSize().height));
+		themeBox.setMinimumSize(new Dimension(80, themeBox.getPreferredSize().height));
+		fileEditorThemeBox.setMinimumSize(new Dimension(80, fileEditorThemeBox.getPreferredSize().height));
+		settingsContentInner.add(appearanceSection);
+		me.justicepro.spigotgui.FileExplorer.FileEditor.setDefaultThemeName(settings.getFileEditorTheme());
+
+		// Wrap in Scrollable panel so content does not stretch vertically when window is tall
+		JPanel settingsContent = new JPanel(new BorderLayout()) {
+			@Override
+			public java.awt.Dimension getPreferredSize() {
+				return settingsContentInner.getPreferredSize();
+			}
+		};
+		settingsContent.add(settingsContentInner, BorderLayout.NORTH);
+
+		JScrollPane settingsScroll = new JScrollPane(settingsContent);
+		settingsScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+		settingsScroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+		settingsScroll.getVerticalScrollBar().setUnitIncrement(24);
+		settingsScroll.setBorder(new EmptyBorder(0, 0, 0, 0));
+		panel_2.setLayout(new BorderLayout());
+		panel_2.add(settingsScroll, BorderLayout.CENTER);
 
 		JPanel panel_3 = new JPanel();
 		tabbedPane.addTab("Files", null, panel_3, null);
@@ -2018,12 +2133,34 @@ public class SpigotGUI extends JFrame {
 		File jarDir = getDefaultDirectory();
 
 		JList<String> fileList = new JList<String>();
-		FileModel fm = new FileModel(fileList);
-		fileList.setModel(fm);
+		fileModel = new FileModel(fileList);
+		fileModel.setParentFrame(this);
+		fileModel.setOpenInSystemDefault(settings.isOpenFilesInSystemDefault());
+		fileList.setModel(fileModel);
+		fileList.setCellRenderer(new DefaultListCellRenderer() {
+			@Override
+			public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+				super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+				String s = value == null ? "" : value.toString();
+				Icon dirIcon = UIManager.getIcon("FileView.directoryIcon");
+				Icon fileIcon = UIManager.getIcon("FileView.fileIcon");
+				if ("..".equals(s)) {
+					setIcon(dirIcon != null ? dirIcon : UIManager.getIcon("FileView.upFolderIcon"));
+					setText(".. (up one level)");
+				} else if (s.startsWith("/")) {
+					setIcon(dirIcon);
+					setText(s.substring(1));
+				} else {
+					setIcon(fileIcon);
+					setText(s);
+				}
+				return this;
+			}
+		});
 
-		fileList.addMouseListener(fm.createMouseListener());
-		fileList.addKeyListener(fm.createKeyListener());
-		fm.loadDirectory(jarDir);
+		fileList.addMouseListener(fileModel.createMouseListener());
+		fileList.addKeyListener(fileModel.createKeyListener());
+		fileModel.loadDirectory(jarDir);
 
 		scrollPane_2.setViewportView(fileList);
 
@@ -2031,6 +2168,7 @@ public class SpigotGUI extends JFrame {
 		btnFileEditor.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent arg0) {
 				FileEditor editor = new FileEditor();
+				editor.setLocationRelativeTo(SpigotGUI.this);
 				editor.setVisible(true);
 			}
 		});
@@ -2046,7 +2184,7 @@ public class SpigotGUI extends JFrame {
 				gl_panel_3.createParallelGroup(Alignment.LEADING)
 				.addGroup(gl_panel_3.createSequentialGroup()
 						.addGap(6)
-						.addComponent(btnFileEditor, GroupLayout.PREFERRED_SIZE, 20, GroupLayout.PREFERRED_SIZE)
+						.addComponent(btnFileEditor)
 						.addPreferredGap(ComponentPlacement.RELATED)
 						.addComponent(scrollPane_2, GroupLayout.DEFAULT_SIZE, 599, Short.MAX_VALUE))
 				);
@@ -2162,68 +2300,6 @@ public class SpigotGUI extends JFrame {
 		JPanel panel_5 = new JPanel();
 		tabbedPane.addTab("About/Help", null, panel_5, null);
 
-		JLabel lblCreatedByJusticepro = new JLabel("By JusticePro, Ymerejliaf");
-
-		JButton btnGetTheOriginal = new JButton("Get the Original");
-		btnGetTheOriginal.addActionListener(new ActionListener() {
-
-			public void actionPerformed(ActionEvent e) {
-				try {
-					Desktop.getDesktop().browse(URI.create("https://spigotmc.org/resources/spigotgui.55266/"));
-				} catch (IOException e1) {
-					e1.printStackTrace();
-				}
-			}
-		});
-
-		JLabel lblThemesByJtatoo = new JLabel("Themes by JTatoo");
-
-		themeBox = new JComboBox<String>();
-		themeBox.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent arg0) {
-				String themeName = themeBox.getSelectedItem() + "";
-				
-				if (!themeName.equalsIgnoreCase("Change Theme")) {
-					Theme theme = Theme.valueOf(themeName.replaceAll(" ", "_"));
-					
-					try {
-						UIManager.setLookAndFeel(theme.getLookAndFeel());
-					} catch (ClassNotFoundException | InstantiationException | IllegalAccessException
-							| UnsupportedLookAndFeelException e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
-					}
-					SwingUtilities.updateComponentTreeUI(SpigotGUI.this);
-					
-				}
-				
-			}
-		});
-		
-		themeBox.setModel(new DefaultComboBoxModel<>(new String[] {"Change Theme", "Aluminium", "Aero", "Acryl", "Bernstein", "Fast", "Graphite", "HiFi", "Luna", "McWin", "Metal", "Mint", "Motif", "Noire", "Smart", "Texture", "Windows"}));
-
-		consoleDarkModeCheckBox = new JCheckBox("Console dark mode");
-		consoleDarkModeCheckBox.setSelected(settings.isConsoleDarkMode());
-		consoleDarkModeCheckBox.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				if (consoleStyleHelper != null) {
-					consoleStyleHelper.setDarkMode(consoleDarkModeCheckBox.isSelected());
-				}
-			}
-		});
-
-		disableConsoleColorsCheckBox = new JCheckBox("Disable console colors");
-		disableConsoleColorsCheckBox.setSelected(!settings.isConsoleColorsEnabled());
-		disableConsoleColorsCheckBox.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				if (consoleStyleHelper != null) {
-					consoleStyleHelper.setColorsEnabled(!disableConsoleColorsCheckBox.isSelected());
-				}
-			}
-		});
-
 		JButton btnHelp = new JButton("Help");
 		btnHelp.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
@@ -2231,56 +2307,39 @@ public class SpigotGUI extends JFrame {
 					InstructionWindow window = new InstructionWindow();
 					window.setVisible(true);
 				} catch (Exception e1) {
-					// TODO Auto-generated catch block
 					e1.printStackTrace();
 				}
 			}
 		});
+
+		JLabel lblCreatedByJusticepro = new JLabel("By JusticePro, Ymerejliaf");
+		JLabel lblThemesByJtatoo = new JLabel("Themes by JTatoo");
+
 		GroupLayout gl_panel_5 = new GroupLayout(panel_5);
 		gl_panel_5.setHorizontalGroup(
 			gl_panel_5.createParallelGroup(Alignment.LEADING)
 				.addGroup(gl_panel_5.createSequentialGroup()
 					.addContainerGap()
-					.addComponent(themeBox, GroupLayout.PREFERRED_SIZE, 149, GroupLayout.PREFERRED_SIZE)
-					.addPreferredGap(ComponentPlacement.RELATED, 340, Short.MAX_VALUE)
-					.addComponent(lblCreatedByJusticepro, GroupLayout.PREFERRED_SIZE, 149, GroupLayout.PREFERRED_SIZE))
-				.addGroup(gl_panel_5.createSequentialGroup()
-					.addGap(427)
 					.addComponent(btnHelp, GroupLayout.PREFERRED_SIZE, 109, GroupLayout.PREFERRED_SIZE)
-					.addPreferredGap(ComponentPlacement.RELATED)
-					.addComponent(btnGetTheOriginal, GroupLayout.PREFERRED_SIZE, 109, GroupLayout.PREFERRED_SIZE))
+					.addContainerGap(GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
 				.addGroup(gl_panel_5.createSequentialGroup()
 					.addContainerGap()
-					.addComponent(lblThemesByJtatoo, GroupLayout.PREFERRED_SIZE, 149, GroupLayout.PREFERRED_SIZE)
-					.addContainerGap(489, Short.MAX_VALUE))
+					.addComponent(lblCreatedByJusticepro)
+					.addContainerGap(GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
 				.addGroup(gl_panel_5.createSequentialGroup()
 					.addContainerGap()
-					.addComponent(consoleDarkModeCheckBox)
-					.addContainerGap(489, Short.MAX_VALUE))
-				.addGroup(gl_panel_5.createSequentialGroup()
-					.addContainerGap()
-					.addComponent(disableConsoleColorsCheckBox)
-					.addContainerGap(489, Short.MAX_VALUE))
+					.addComponent(lblThemesByJtatoo)
+					.addContainerGap(GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
 		);
 		gl_panel_5.setVerticalGroup(
-			gl_panel_5.createParallelGroup(Alignment.TRAILING)
-				.addGroup(gl_panel_5.createSequentialGroup()
-					.addContainerGap(493, Short.MAX_VALUE)
-					.addGroup(gl_panel_5.createParallelGroup(Alignment.TRAILING)
-						.addComponent(btnGetTheOriginal, GroupLayout.PREFERRED_SIZE, 20, GroupLayout.PREFERRED_SIZE)
-						.addComponent(btnHelp, GroupLayout.PREFERRED_SIZE, 20, GroupLayout.PREFERRED_SIZE)))
-				.addGroup(gl_panel_5.createSequentialGroup()
-					.addContainerGap()
-					.addGroup(gl_panel_5.createParallelGroup(Alignment.BASELINE)
-						.addComponent(lblCreatedByJusticepro, GroupLayout.PREFERRED_SIZE, 16, GroupLayout.PREFERRED_SIZE)
-						.addComponent(themeBox, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE))
-					.addPreferredGap(ComponentPlacement.RELATED)
-					.addComponent(lblThemesByJtatoo, GroupLayout.PREFERRED_SIZE, 16, GroupLayout.PREFERRED_SIZE)
-					.addPreferredGap(ComponentPlacement.RELATED)
-					.addComponent(consoleDarkModeCheckBox)
-					.addPreferredGap(ComponentPlacement.RELATED)
-					.addComponent(disableConsoleColorsCheckBox)
-					.addContainerGap(409, Short.MAX_VALUE))
+			gl_panel_5.createSequentialGroup()
+				.addContainerGap()
+				.addComponent(btnHelp)
+				.addPreferredGap(ComponentPlacement.UNRELATED)
+				.addComponent(lblCreatedByJusticepro)
+				.addPreferredGap(ComponentPlacement.RELATED)
+				.addComponent(lblThemesByJtatoo)
+				.addContainerGap(GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
 		);
 		panel_5.setLayout(gl_panel_5);
 
@@ -2325,7 +2384,8 @@ public class SpigotGUI extends JFrame {
 					return fromBackup;
 				}
 			}
-			Settings defaults = new Settings(ServerSettings.getDefault(), Theme.Graphite, 13, false, true);
+			Theme defaultTheme = System.getProperty("os.name", "").toLowerCase().contains("win") ? Theme.Windows : Theme.Graphite;
+			Settings defaults = new Settings(ServerSettings.getDefault(), defaultTheme, 13, false, true, false, "default");
 			saveSettings(defaults);
 			return defaults;
 		}
@@ -2347,7 +2407,8 @@ public class SpigotGUI extends JFrame {
 
 		// Both failed — backup main file so we don't lose it, then use defaults
 		file.renameTo(backupFile);
-		Settings defaults = new Settings(ServerSettings.getDefault(), Theme.Graphite, 13, false, true);
+		Theme defaultTheme = System.getProperty("os.name", "").toLowerCase().contains("win") ? Theme.Windows : Theme.Graphite;
+		Settings defaults = new Settings(ServerSettings.getDefault(), defaultTheme, 13, false, true, false, "default");
 		saveSettings(defaults);
 		return defaults;
 	}
@@ -2574,6 +2635,38 @@ public class SpigotGUI extends JFrame {
 		return new File(System.getProperty("user.dir", "."));
 	}
 
+	/** Updates the theme label to (may require restart) or (restart required) in red; keeps label at fixed size so layout never shifts. */
+	private void updateThemeLabelFor(Theme selectedTheme) {
+		if (lblTheme == null) return;
+		boolean sameFamily = initialThemeForSession != null && initialThemeForSession.getFamily() == selectedTheme.getFamily();
+		if (sameFamily) {
+			lblTheme.setText("Theme (may require restart)");
+			lblTheme.setForeground(null);
+			if (themeLabelWidth <= 0) {
+				int w = lblTheme.getPreferredSize().width;
+				int minW = lblTheme.getFontMetrics(lblTheme.getFont()).stringWidth("Theme (may require restart)") + 8;
+				themeLabelWidth = Math.max(w, minW);
+				themeLabelHeight = lblTheme.getPreferredSize().height;
+			}
+		} else {
+			lblTheme.setText("<html>Theme <font color='red'>(restart required)</font></html>");
+			if (themeLabelWidth <= 0) {
+				int w = lblTheme.getPreferredSize().width;
+				int minW = lblTheme.getFontMetrics(lblTheme.getFont()).stringWidth("Theme (may require restart)") + 8;
+				themeLabelWidth = Math.max(w, minW);
+				themeLabelHeight = lblTheme.getPreferredSize().height;
+			}
+		}
+		// Always apply fixed size so the label never changes size and the settings page doesn't shift
+		lblTheme.setPreferredSize(new Dimension(themeLabelWidth, themeLabelHeight));
+		lblTheme.setMinimumSize(new Dimension(themeLabelWidth, themeLabelHeight));
+	}
+
+	private String getFileEditorThemeFromBox() {
+		Object sel = fileEditorThemeBox != null ? fileEditorThemeBox.getSelectedItem() : null;
+		return (sel != null && sel.toString().length() > 0) ? sel.toString() : "default";
+	}
+
 	private static void addPopup(Component component, final JPopupMenu popup) {
 		component.addMouseListener(new MouseAdapter() {
 			public void mousePressed(MouseEvent e) {
@@ -2638,7 +2731,7 @@ public class SpigotGUI extends JFrame {
 				}
 				restart = false;
 			}else {
-				setTitle("SpigotGUI Remastered (" + versionTag + " \"" + versionName + "\")");
+				setTitle("SpigotGUI Remastered (" + versionTag + ")");
 				try {
 					setActive(false);
 				} catch (IOException e) {
@@ -2690,9 +2783,9 @@ public class SpigotGUI extends JFrame {
 		public void setVersionDisplay() {
 
 			if (getVersion() != null) {
-				setTitle("SpigotGUI Remastered (" + versionTag + " \"" + versionName + "\") - " + getVersion().getName() + " API [" + getServerType().getName() + "]");
+				setTitle("SpigotGUI Remastered (" + versionTag + ") - " + getVersion().getName() + " API [" + getServerType().getName() + "]");
 			}else {
-				setTitle("SpigotGUI Remastered (" + versionTag + " \"" + versionName + "\") - [" + getServerType().getName() + "]");
+				setTitle("SpigotGUI Remastered (" + versionTag + ") - [" + getServerType().getName() + "]");
 			}
 
 		}

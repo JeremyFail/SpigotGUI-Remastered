@@ -37,5 +37,13 @@ public enum Theme {
 	public String getLookAndFeel() {
 		return lookAndFeel;
 	}
-	
+
+	/** Theme family: SWING (JTattoo/Metal), WINDOWS, or MOTIF. Switching between families requires restart. */
+	public ThemeFamily getFamily() {
+		if (this == Windows) return ThemeFamily.WINDOWS;
+		if (this == Motif) return ThemeFamily.MOTIF;
+		return ThemeFamily.SWING;
+	}
+
+	public enum ThemeFamily { SWING, WINDOWS, MOTIF }
 }

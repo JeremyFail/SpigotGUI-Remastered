@@ -36,7 +36,7 @@ public enum ChatColor {
 	
 	@Override
 	public String toString() {
-		return "§" + c;
+		return "\u00A7" + c;
 	}
 	
 }

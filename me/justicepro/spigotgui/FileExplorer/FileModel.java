@@ -15,13 +15,28 @@ import javax.swing.DefaultListModel;
 import javax.swing.JList;
 import javax.swing.JOptionPane;
 
+import java.awt.Component;
+import java.awt.Desktop;
+
 public class FileModel extends DefaultListModel<String> {
-	
+
 	private JList<String> list;
 	private File dir;
-	
+	/** When true, open files in the system default application instead of the built-in editor. */
+	private boolean openInSystemDefault = false;
+	/** Optional parent for dialogs and positioning child windows on the same monitor. */
+	private Component parentFrame;
+
 	public FileModel(JList<String> list) {
 		this.list = list;
+	}
+
+	public void setParentFrame(Component parentFrame) {
+		this.parentFrame = parentFrame;
+	}
+
+	public void setOpenInSystemDefault(boolean openInSystemDefault) {
+		this.openInSystemDefault = openInSystemDefault;
 	}
 	
 	public void loadDirectory(File dir) {
@@ -86,16 +101,26 @@ public class FileModel extends DefaultListModel<String> {
 				if (item.equalsIgnoreCase("..")) {
 					// Go up a directory
 					loadDirectory(new File(dir.getAbsolutePath() + item).getParentFile());
-				}else {
-					// Edit File
-					FileEditor editor = new FileEditor();
-					try {
-						editor.openFile(new File(dir.getAbsolutePath() + "/" + item));
-					} catch (IOException e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
+				} else {
+					File file = new File(dir.getAbsolutePath() + "/" + item);
+					if (openInSystemDefault) {
+						try {
+							Desktop.getDesktop().open(file);
+						} catch (IOException ex) {
+							JOptionPane.showMessageDialog(parentFrame, "Could not open file: " + ex.getMessage());
+						}
+					} else {
+						FileEditor editor = new FileEditor();
+						if (parentFrame != null) {
+							editor.setLocationRelativeTo(parentFrame);
+						}
+						try {
+							editor.openFile(file);
+						} catch (IOException e) {
+							e.printStackTrace();
+						}
+						editor.setVisible(true);
 					}
-					editor.setVisible(true);
 				}
 				
 			}
@@ -116,14 +141,14 @@ public class FileModel extends DefaultListModel<String> {
 				
 				if (!item.equalsIgnoreCase("..")) {
 					
-					int result = JOptionPane.showConfirmDialog(null, "Do you want to delete '" + item + "'?");
+					int result = JOptionPane.showConfirmDialog(parentFrame, "Do you want to delete '" + item + "'?");
 					
 					if (result==JOptionPane.YES_OPTION) {
 						File file = new File(dir.getAbsolutePath() + "/" + item);
 						try {
 							Files.deleteIfExists(file.toPath());
 						} catch (IOException e) {
-							JOptionPane.showMessageDialog(null, "Couldn't delete file: '" + e.getMessage() + "'");
+							JOptionPane.showMessageDialog(parentFrame, "Couldn't delete file: '" + e.getMessage() + "'");
 						}
 						refresh();
 					}

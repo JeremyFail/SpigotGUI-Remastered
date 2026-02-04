@@ -14,6 +14,10 @@ public class Settings implements Serializable {
 	private boolean consoleDarkMode = false;
 	/** Console colors enabled; if false, display all text in default fg (black/white). Persisted like theme. */
 	private boolean consoleColorsEnabled = true;
+	/** When true, double-clicking a file in the Files tab opens it in the system default app instead of the built-in editor. */
+	private boolean openFilesInSystemDefault = false;
+	/** File editor theme name (e.g. "default", "dark", "eclipse"). Used for RSyntaxTextArea built-in themes. */
+	private String fileEditorTheme = "default";
 
 	public Settings(ServerSettings serverSettings, Theme theme, Object fontSize) {
 		this.serverSettings = serverSettings;
@@ -34,6 +38,25 @@ public class Settings implements Serializable {
 		this.fontSize = fontSize;
 		this.consoleDarkMode = consoleDarkMode;
 		this.consoleColorsEnabled = consoleColorsEnabled;
+	}
+
+	public Settings(ServerSettings serverSettings, Theme theme, Object fontSize, boolean consoleDarkMode, boolean consoleColorsEnabled, boolean openFilesInSystemDefault) {
+		this.serverSettings = serverSettings;
+		this.theme = theme;
+		this.fontSize = fontSize;
+		this.consoleDarkMode = consoleDarkMode;
+		this.consoleColorsEnabled = consoleColorsEnabled;
+		this.openFilesInSystemDefault = openFilesInSystemDefault;
+	}
+
+	public Settings(ServerSettings serverSettings, Theme theme, Object fontSize, boolean consoleDarkMode, boolean consoleColorsEnabled, boolean openFilesInSystemDefault, String fileEditorTheme) {
+		this.serverSettings = serverSettings;
+		this.theme = theme;
+		this.fontSize = fontSize;
+		this.consoleDarkMode = consoleDarkMode;
+		this.consoleColorsEnabled = consoleColorsEnabled;
+		this.openFilesInSystemDefault = openFilesInSystemDefault;
+		this.fileEditorTheme = fileEditorTheme != null ? fileEditorTheme : "default";
 	}
 	
 	public ServerSettings getServerSettings() {
@@ -66,5 +89,21 @@ public class Settings implements Serializable {
 
 	public void setConsoleColorsEnabled(boolean consoleColorsEnabled) {
 		this.consoleColorsEnabled = consoleColorsEnabled;
+	}
+
+	public boolean isOpenFilesInSystemDefault() {
+		return openFilesInSystemDefault;
+	}
+
+	public void setOpenFilesInSystemDefault(boolean openFilesInSystemDefault) {
+		this.openFilesInSystemDefault = openFilesInSystemDefault;
+	}
+
+	public String getFileEditorTheme() {
+		return (fileEditorTheme != null && !fileEditorTheme.isEmpty()) ? fileEditorTheme : "default";
+	}
+
+	public void setFileEditorTheme(String fileEditorTheme) {
+		this.fileEditorTheme = fileEditorTheme != null ? fileEditorTheme : "default";
 	}
 }
