@@ -101,31 +101,31 @@ public class ModuleManager {
 	{
 		URL[] url = new URL[]{file.toURL()};
 		
-		URLClassLoader classLoader = new URLClassLoader(url);
-		
-		InputStream configStream = classLoader.getResourceAsStream("module.properties");
-		
-		if (configStream == null) {
-			throw new IOException("module.properties not found.");
-		}
-		
-		Properties config = new Properties();
-		config.load(configStream);
-		
-		if (!config.containsKey("main")) {
-			throw new IOException("'main' was not found.");
-		}
-		
-		Class<?> mClass = classLoader.loadClass(config.getProperty("main"));
-		
-		Object classInstance = mClass.newInstance();
-		
-		if (classInstance instanceof Module) {
-			Module module = (Module)classInstance;
-			module.init();
-			modules.add(module);
-		}else {
-			throw new IOException("'main' is not an instance of Module.");
+		try (URLClassLoader classLoader = new URLClassLoader(url)) {
+			InputStream configStream = classLoader.getResourceAsStream("module.properties");
+			
+			if (configStream == null) {
+				throw new IOException("module.properties not found.");
+			}
+			
+			Properties config = new Properties();
+			config.load(configStream);
+			
+			if (!config.containsKey("main")) {
+				throw new IOException("'main' was not found.");
+			}
+			
+			Class<?> mClass = classLoader.loadClass(config.getProperty("main"));
+			
+			Object classInstance = mClass.newInstance();
+			
+			if (classInstance instanceof Module) {
+				Module module = (Module)classInstance;
+				module.init();
+				modules.add(module);
+			}else {
+				throw new IOException("'main' is not an instance of Module.");
+			}
 		}
 		
 	}

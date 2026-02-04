@@ -13,7 +13,6 @@ import me.justicepro.spigotgui.RemoteAdmin.Packet;
 import me.justicepro.spigotgui.RemoteAdmin.User;
 import me.justicepro.spigotgui.RemoteAdmin.PacketHandlers.ServerHandler;
 import me.justicepro.spigotgui.RemoteAdmin.Packets.PacketConsole;
-import me.justicepro.spigotgui.RemoteAdmin.Packets.PacketMotd;
 
 public class RConnection extends Thread implements Console {
 	

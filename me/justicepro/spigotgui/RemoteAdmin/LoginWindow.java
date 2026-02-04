@@ -1,7 +1,5 @@
 package me.justicepro.spigotgui.RemoteAdmin;
 
-import java.awt.BorderLayout;
-import java.awt.EventQueue;
 import java.io.IOException;
 
 import javax.swing.JFrame;

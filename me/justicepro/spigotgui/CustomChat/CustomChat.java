@@ -1,7 +1,5 @@
 package me.justicepro.spigotgui.CustomChat;
 
-import java.util.HashMap;
-
 import me.justicepro.spigotgui.Module;
 import me.justicepro.spigotgui.ProcessException;
 

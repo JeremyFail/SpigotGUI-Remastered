@@ -1,6 +1,5 @@
 package me.justicepro.spigotgui.RemoteAdmin.Packets;
 
-import me.justicepro.spigotgui.RemoteAdmin.Mail;
 import me.justicepro.spigotgui.RemoteAdmin.Packet;
 
 public class PacketQueryMail extends Packet {

@@ -90,6 +90,11 @@ public class Module {
 			System.out.println(message);
 			onSpongeVersionDetected(message.split("running ")[1].split(" version")[0]);
 		}
+
+		if (message.startsWith("[bootstrap] Loading Paper")) {
+			// Version example: [bootstrap] Loading Paper 1.21.11-55-main@b36b49a (2025-12-26T16:47:57Z) for Minecraft 1.21.11
+			onPaperVersionDetected(message.split("Loading Paper ")[1].split(" ")[0]);
+		}
 		
 		if (version != null) {
 			
@@ -336,6 +341,10 @@ public class Module {
 			serverType = ServerType.Bukkit;
 		}
 		
+	}
+
+	public void onPaperVersionDetected(String version) {
+		serverType = ServerType.Paper;
 	}
 	
 	/**

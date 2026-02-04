@@ -14,7 +14,6 @@ import javax.swing.JOptionPane;
 import me.justicepro.spigotgui.RemoteAdmin.AdminWindow;
 import me.justicepro.spigotgui.RemoteAdmin.Packet;
 import me.justicepro.spigotgui.RemoteAdmin.PacketHandler;
-import me.justicepro.spigotgui.RemoteAdmin.Server.RConnection;
 import me.justicepro.spigotgui.RemoteAdmin.Server.RServer;
 
 public class RClient extends Thread {

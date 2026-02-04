@@ -4,6 +4,7 @@ public enum ServerType {
 	
 	Bukkit(true),
 	Spigot(true),
+	Paper(true),
 	
 	SpongeVanilla(false),
 	SpongeForge(false),

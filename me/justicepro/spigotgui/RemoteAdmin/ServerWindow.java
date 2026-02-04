@@ -1,7 +1,5 @@
 package me.justicepro.spigotgui.RemoteAdmin;
 
-import java.awt.BorderLayout;
-import java.awt.EventQueue;
 import java.io.IOException;
 import java.util.List;
 
@@ -12,10 +10,7 @@ import javax.swing.border.EmptyBorder;
 import me.justicepro.spigotgui.JModulePanel;
 import me.justicepro.spigotgui.Module;
 import me.justicepro.spigotgui.ModuleManager;
-import me.justicepro.spigotgui.RemoteAdmin.Client.RClient;
-import me.justicepro.spigotgui.RemoteAdmin.Packets.PacketLogin;
 import me.justicepro.spigotgui.RemoteAdmin.Server.RServer;
-import me.justicepro.spigotgui.Utils.Player;
 
 import javax.swing.JTextField;
 import javax.swing.JLabel;
@@ -51,7 +46,6 @@ public class ServerWindow extends JFrame {
 	 * Create the frame.
 	 */
 	public ServerWindow() {
-		boolean online = false;
 		this.server = new RServer();
 		setTitle("Server - Remote Admin");
 		setResizable(false);

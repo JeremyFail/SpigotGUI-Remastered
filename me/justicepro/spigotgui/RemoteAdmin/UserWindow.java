@@ -4,7 +4,6 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.IOException;
 
-import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
@@ -17,8 +16,6 @@ import javax.swing.border.TitledBorder;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
-import me.justicepro.spigotgui.Module;
-import me.justicepro.spigotgui.ModuleManager;
 import javax.swing.GroupLayout;
 import javax.swing.GroupLayout.Alignment;
 import javax.swing.LayoutStyle.ComponentPlacement;
@@ -51,7 +48,7 @@ public class UserWindow extends JFrame {
 				if (chckbxShowPassword.isSelected()) {
 					passwordField.setEchoChar((char)0);
 				}else {
-					passwordField.setEchoChar('•');
+					passwordField.setEchoChar('ï¿½');
 				}
 				
 			}

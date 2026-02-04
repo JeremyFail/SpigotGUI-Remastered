@@ -10,7 +10,6 @@ import java.util.ArrayList;
 import me.justicepro.spigotgui.Console;
 import me.justicepro.spigotgui.Module;
 import me.justicepro.spigotgui.ProcessException;
-import me.justicepro.spigotgui.Server;
 import me.justicepro.spigotgui.Core.SpigotGUI;
 import me.justicepro.spigotgui.RemoteAdmin.CorePermissions;
 import me.justicepro.spigotgui.RemoteAdmin.Mail;
@@ -139,14 +138,14 @@ public class ServerHandler extends Module implements PacketHandler {
 					}
 
 				}else {
-					user.addMail(new Mail("Mail not sent.", "Couldn't send mail: user was not found."));
+					connection.user.addMail(new Mail("Mail not sent.", "Couldn't send mail: user was not found."));
 					try {
 						User.saveUsers();
 					} catch (IOException e) {
 						// TODO Auto-generated catch block
 						e.printStackTrace();
 					}
-					connection.sendPacket(new PacketMailRefresh(user.mail));
+					connection.sendPacket(new PacketMailRefresh(connection.user.mail));
 				}
 
 			}else {

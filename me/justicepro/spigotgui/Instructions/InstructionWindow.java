@@ -1,7 +1,6 @@
 package me.justicepro.spigotgui.Instructions;
 
 import java.awt.BorderLayout;
-import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;

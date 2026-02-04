@@ -3,7 +3,6 @@ package me.justicepro.spigotgui.FileExplorer;
 import java.awt.BorderLayout;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 
