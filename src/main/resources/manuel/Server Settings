@@ -1,0 +1,16 @@
+<h1>Server Settings</h1>
+<p>The server settings are startup settings.</p>
+<br>
+
+<h2>Ram</h2>
+<p>Ram is the speed of the server by megabytes.</p>
+<p>Having a higher maximum ram the better.</p>
+<br>
+
+<h2>Custom Arguments and Switches</h2>
+<p>The Custom Arguments and Switches are custom text that'll be in the java command. <i>I just don't touch them.</i></p>
+<br>
+
+<h2>Server File</h2>
+<p>The server file is the jar file of the server. Default is "server.jar".</p>
+<br>

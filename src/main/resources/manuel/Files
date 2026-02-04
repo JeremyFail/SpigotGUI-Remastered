@@ -1,0 +1,20 @@
+<h1>Files</h1>
+<p>SpigotGUI Remastered contains a file explorer and editor.</p>
+<br>
+
+<h2>Using the explorer</h2>
+<p>The explorer was created to be used for managing the server files.</p>
+<p>To edit a file, you may double click a file and it'll open the editor.</p>
+<p>Files that start with a slash is a directory which you can go into by double clicking it.</p>
+<p>You can move up a directory by double clicking "..".</p>
+<br>
+
+<h2>Using the editor</h2>
+<p>You can use the editor like a usual one. You can also click File and you'll be able to do the following:</p>
+<ul>
+	<li>New</li>
+	<li>Open</li>
+	<li>Save</li>
+</ul>
+<p>They do what you'd think they do.</p>
+<br>

@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>me.justicepro</groupId>
+    <artifactId>spigotgui-remastered</artifactId>
+    <version>1.1.1</version>
+    <packaging>jar</packaging>
+    <name>SpigotGUI Remastered</name>
+    <description>Desktop GUI for running and administrating Minecraft servers</description>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+    </properties>
+
+    <dependencies>
+        <!-- JTattoo Look and Feel (themes) -->
+        <dependency>
+            <groupId>com.jtattoo</groupId>
+            <artifactId>JTattoo</artifactId>
+            <version>1.6.11</version>
+        </dependency>
+        <!-- JUnit 4 for tests -->
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.13.2</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <!-- Use project root as source root so existing package layout (me/justicepro/...) is unchanged -->
+        <sourceDirectory>.</sourceDirectory>
+        <resources>
+            <resource>
+                <directory>.</directory>
+                <excludes>
+                    <exclude>me/**</exclude>
+                    <exclude>**/*.java</exclude>
+                    <exclude>**/*.md</exclude>
+                    <exclude>**/*.pdf</exclude>
+                    <exclude>pom.xml</exclude>
+                    <exclude>target/**</exclude>
+                </excludes>
+            </resource>
+            <!-- Standard Maven resources: put images, eula.txt, manuels, manuel/ here -->
+            <resource>
+                <directory>src/main/resources</directory>
+                <targetPath>.</targetPath>
+            </resource>
+        </resources>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.11.0</version>
+                <configuration>
+                    <source>1.8</source>
+                    <target>1.8</target>
+                    <encoding>UTF-8</encoding>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.3.0</version>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <mainClass>me.justicepro.spigotgui.Core.SpigotGUI</mainClass>
+                            <addClasspath>true</addClasspath>
+                            <classpathPrefix>lib/</classpathPrefix>
+                        </manifest>
+                    </archive>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.6.0</version>
+                <executions>
+                    <execution>
+                        <id>copy-dependencies</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/lib</outputDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

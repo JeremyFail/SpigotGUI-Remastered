@@ -1,0 +1,37 @@
+<h1>The Console</h1>
+<p>The console is the first page that you'll see. It's also the most important you'll see. It's the console that leads straight to the server.</p>
+<p>You could manage the server with just this.</p>
+<br>
+
+<h2>Starting the server</h2>
+<p>To start a server, you must swap to "Server Settings" and at the bottom left they'll be a button that says "Set Server File". You'll need to select jar file for your server.</p>
+<p>After you've selected your jar file, swap back to the console and click "Start Server".</p>
+<br>
+
+<h2>Managing the Server</h2>
+
+<h3>Accessing the console</h3>
+<p>You see that big gray box. That's the server's output. When messages are sent from the server, they'll end up in there.</p>
+<p>The long white line below the output is the command input. You can send console commands by typing the command and pressing enter.</p>
+<br>
+
+<h3>Stopping the server</h3>
+<p>Clicking the button "Stop Server" will execute /stop in the console.</p>
+<br>
+
+<h3>Restarting the server</h3>
+<p>The button "Restart Server" will stop and then start the server again.</p>
+<br>
+
+<h3>The Exit Timer</h3>
+<p>If you select an exit time, when stopping or restarting a server, it'll broadcast a warning.</p>
+<br>
+
+<h3>Status</h3>
+<p>The big red or green box at the bottom right is the status. If the server is offline, the light will be red. If the server is online, the list will be green.</p>
+<p>There's also a status text at the bottom left.</p>
+<br>
+
+<h3>IP</h3>
+<p>You can see your IP at the top left.</p>
+<br>

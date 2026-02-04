@@ -1,0 +1,58 @@
+<h1>Remote Admin</h1>
+<p>When you pull up this page, there are two buttons.</p>
+<ul>
+	<li>Connect to Server [Client]</li>
+	<li>Host Server [Server]</li>
+</ul>
+<br>
+
+<h2>Client</h2>
+<p>When you click "Connect to Server". It'll ask you for an ip for the server. If you place in the correct ip. It'll pull up a login page.</p>
+<br>
+
+<h3>Logged In</h3>
+<p>When you login a message box will pop-up saying the modules that the server uses.</p>
+<br>
+
+<h3>The Console</h3>
+<p>The console works about the same way the normal console works. <i>See "Console"</i></p>
+<br>
+
+<h3>Staff Chat</h3>
+<p>The staff chat is one of the ways that the admins can talk to each other.</p>
+<br>
+
+<h3>Server Settings</h3>
+<p>The server settings work the same way they work in the main Server Settings page <i>See "Server Settings"</i>. You can also start and stop the server from this page.</p>
+<br>
+
+<h3>Modules</h3>
+<p>Modules are mods for SpigotGUI Remastered. The Module List Page is a list for the modules. If you right click a module there can be some options.</p>
+<br>
+
+<h3>Mail</h3>
+<p>The mail is the second way the admins contact each other. It is mainly intended for sending mail when they are offline.</p>
+<br>
+
+<h2>Server</h2>
+<p>By hosting a server it means people that connect to your remote admin, they connect to your minecraft server to manage it.</p>
+<p>You can start/stop the remote admin by the buttons on the left and right.</p>
+<br>
+
+<h3>Creating a User</h3>
+<p>Type the username and password for the user on the right. Then press "Add User".</p>
+<br>
+
+<h3>Delete a User</h3>
+<p>Select a user and right click and select, "Delete User".</p>
+<br>
+
+<h3>Managing a User</h3>
+<p>Select a user and right click and select, "Manage User".</p>
+<p>What you can manage in the menu is</p>
+<ul>
+	<li>Permissions</li>
+	<li>Changing the Password</li>
+</ul>
+
+<br>

@@ -1,0 +1,15 @@
+<h1>Players</h1>
+<p>The players page is a UI for player management. It's just a simple player manager.</p>
+<br>
+
+<h2>Managing the player</h2>
+<p>If you select a player name and right click, you'll get this list of controls.</p>
+
+<ul>
+	<li>Op</li>
+	<li>Deop</li>
+	<li>Kick</li>
+	<li>Ban</li>
+</ul>
+
+<i>You can also pardon a player with the "Pardon a Player" at the bottom left.</i>
