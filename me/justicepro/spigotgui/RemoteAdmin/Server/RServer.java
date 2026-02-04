@@ -45,7 +45,23 @@ public class RServer extends Thread {
 			e.printStackTrace();
 		}
 	}
-	
+
+	/**
+	 * Safely shut down the server (replaces deprecated Thread.stop()).
+	 * Stops accepting new connections and interrupts the thread.
+	 */
+	public void shutdown() {
+		run = false;
+		try {
+			if (ss != null && !ss.isClosed()) {
+				ss.close();
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		interrupt();
+	}
+
 	/**
 	 * On data sent to the server.
 	 * @param utf The raw data.

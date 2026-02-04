@@ -86,13 +86,7 @@ public class ServerWindow extends JFrame {
 		JButton btnStopServer = new JButton("Stop Server");
 		btnStopServer.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				try {
-					server.ss.close();
-				} catch (IOException e1) {
-					// TODO Auto-generated catch block
-					e1.printStackTrace();
-				}
-				server.stop();
+				server.shutdown();
 				lblStatus.setText("Status: Offline");
 			}
 		});

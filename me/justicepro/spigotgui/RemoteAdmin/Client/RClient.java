@@ -17,11 +17,14 @@ import me.justicepro.spigotgui.RemoteAdmin.PacketHandler;
 import me.justicepro.spigotgui.RemoteAdmin.Server.RServer;
 
 public class RClient extends Thread {
-	
+
+	private volatile boolean running = true;
+	private volatile boolean closedByShutdown = false;
+
 	public Socket socket;
 	public static ArrayList<PacketHandler> clientPacketHandlers = new ArrayList<PacketHandler>();
 	public AdminWindow adminWindow;
-	
+
 	/**
 	 * The Client.
 	 * @param ip The server ip.
@@ -31,21 +34,36 @@ public class RClient extends Thread {
 		this.socket = new Socket(ip, RServer.port);
 		this.adminWindow = adminWindow;
 	}
-	
+
+	/**
+	 * Safely shut down the client (replaces deprecated Thread.stop()).
+	 * Stops the read loop and closes the socket.
+	 */
+	public void shutdown() {
+		closedByShutdown = true;
+		running = false;
+		try {
+			if (socket != null && !socket.isClosed()) {
+				socket.close();
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		interrupt();
+	}
+
 	@Override
 	public void run() {
-		
+
 		DataInputStream input = null;
-		DataOutputStream output = null;
 		try {
 			input = new DataInputStream(socket.getInputStream());
-			output = new DataOutputStream(socket.getOutputStream());
 		} catch (IOException e1) {
 			// TODO Auto-generated catch block
 			e1.printStackTrace();
 		}
-		
-		while (socket.isConnected()) {
+
+		while (running && socket != null && socket.isConnected()) {
 			try {
 				try {
 					String utf = input.readUTF();
@@ -61,20 +79,22 @@ public class RClient extends Thread {
 				}
 				
 				
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-		}
-		try {
-			socket.close();
-			JOptionPane.showMessageDialog(null, "You have been disconnected from the server.");
-			adminWindow.dispose();
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		
+		}
+		try {
+			if (socket != null && !socket.isClosed()) {
+				socket.close();
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		if (!closedByShutdown) {
+			JOptionPane.showMessageDialog(null, "You have been disconnected from the server.");
+			adminWindow.dispose();
+		}
 	}
 	
 	/**

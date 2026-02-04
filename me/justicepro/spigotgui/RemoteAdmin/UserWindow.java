@@ -48,7 +48,7 @@ public class UserWindow extends JFrame {
 				if (chckbxShowPassword.isSelected()) {
 					passwordField.setEchoChar((char)0);
 				}else {
-					passwordField.setEchoChar('�');
+					passwordField.setEchoChar('?');
 				}
 				
 			}
@@ -57,7 +57,7 @@ public class UserWindow extends JFrame {
 		JButton btnApplyPassword = new JButton("Apply Password");
 		btnApplyPassword.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent arg0) {
-				user.setPassword(passwordField.getText());
+				user.setPassword(new String(passwordField.getPassword()));
 				try {
 					User.saveUsers();
 				} catch (IOException e) {

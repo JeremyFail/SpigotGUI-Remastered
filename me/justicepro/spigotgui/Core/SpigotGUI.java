@@ -19,8 +19,7 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Inet4Address;
-import java.net.URISyntaxException;
-import java.net.URL;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
@@ -87,6 +86,7 @@ import me.justicepro.spigotgui.RemoteAdmin.ServerWindow;
 import me.justicepro.spigotgui.RemoteAdmin.PacketHandlers.ServerHandler;
 import me.justicepro.spigotgui.RemoteAdmin.Server.RServer;
 import me.justicepro.spigotgui.Utils.ConsoleStyleHelper;
+import me.justicepro.spigotgui.Utils.Dialogs;
 import me.justicepro.spigotgui.Utils.Player;
 
 public class SpigotGUI extends JFrame {
@@ -1864,10 +1864,10 @@ public class SpigotGUI extends JFrame {
 		tabbedPane.addTab("Settings", null, panel_2, null);
 
 		minRam = new JSpinner();
-		minRam.setModel(new SpinnerNumberModel(new Integer(1024), null, null, new Integer(1)));
+		minRam.setModel(new SpinnerNumberModel(Integer.valueOf(1024), null, null, Integer.valueOf(1)));
 
 		maxRam = new JSpinner();
-		maxRam.setModel(new SpinnerNumberModel(new Integer(1024), null, null, new Integer(1)));
+		maxRam.setModel(new SpinnerNumberModel(Integer.valueOf(1024), null, null, Integer.valueOf(1)));
 		
 		JLabel lblMinRam = new JLabel("Min Ram");
 		lblMinRam.setHorizontalAlignment(SwingConstants.LEFT);
@@ -1893,7 +1893,7 @@ public class SpigotGUI extends JFrame {
 			}
 		});
 		
-		fontSpinner.setModel(new SpinnerNumberModel(new Integer(13), null, null, new Integer(1)));
+		fontSpinner.setModel(new SpinnerNumberModel(Integer.valueOf(13), null, null, Integer.valueOf(1)));
 		
 		minRam.setValue(serverSettings.getMinRam());
 		maxRam.setValue(serverSettings.getMaxRam());
@@ -2169,12 +2169,10 @@ public class SpigotGUI extends JFrame {
 
 			public void actionPerformed(ActionEvent e) {
 				try {
-					Desktop.getDesktop().browse(new URL("https://spigotmc.org/resources/spigotgui.55266/").toURI());
-				} catch (IOException | URISyntaxException e1) {
-					// TODO Auto-generated catch block
+					Desktop.getDesktop().browse(URI.create("https://spigotmc.org/resources/spigotgui.55266/"));
+				} catch (IOException e1) {
 					e1.printStackTrace();
 				}
-
 			}
 		});
 
@@ -2202,7 +2200,7 @@ public class SpigotGUI extends JFrame {
 			}
 		});
 		
-		themeBox.setModel(new DefaultComboBoxModel(new String[] {"Change Theme", "Aluminium", "Aero", "Acryl", "Bernstein", "Fast", "Graphite", "HiFi", "Luna", "McWin", "Metal", "Mint", "Motif", "Noire", "Smart", "Texture", "Windows"}));
+		themeBox.setModel(new DefaultComboBoxModel<>(new String[] {"Change Theme", "Aluminium", "Aero", "Acryl", "Bernstein", "Fast", "Graphite", "HiFi", "Luna", "McWin", "Metal", "Mint", "Motif", "Noire", "Smart", "Texture", "Windows"}));
 
 		consoleDarkModeCheckBox = new JCheckBox("Console dark mode");
 		consoleDarkModeCheckBox.setSelected(settings.isConsoleDarkMode());
@@ -2370,16 +2368,16 @@ public class SpigotGUI extends JFrame {
 		if (curTop != null) { // should only be null at root
 			curTop.add(curDir);
 		}
-		Vector ol = new Vector();
+		Vector<String> ol = new Vector<>();
 		String[] tmp = dir.list();
 		for (int i = 0; i < tmp.length; i++)
 			ol.addElement(tmp[i]);
 		Collections.sort(ol, String.CASE_INSENSITIVE_ORDER);
 		File f;
-		Vector files = new Vector();
+		Vector<String> files = new Vector<>();
 		// Make two passes, one for Dirs and one for Files. This is #1.
 		for (int i = 0; i < ol.size(); i++) {
-			String thisObject = (String) ol.elementAt(i);
+			String thisObject = ol.elementAt(i);
 			String newPath;
 			if (curPath.equals("."))
 				newPath = thisObject;
@@ -2437,20 +2435,20 @@ public class SpigotGUI extends JFrame {
 	}
 
 	public static void removePlayerData(String player) {
-
-		ArrayList<Player> plys = (ArrayList<Player>) players.clone();
-
-		for (int i = 0; i < plys.size(); i++) {
-			Player p = plys.get(i);
-
-			if (p.username.equalsIgnoreCase(player)) {
-				players.remove(i);
-				System.out.println("Player Found");
+		try {
+			ArrayList<Player> plys = new ArrayList<>(players);
+			for (int i = 0; i < plys.size(); i++) {
+				Player p = plys.get(i);
+				if (p.username.equalsIgnoreCase(player)) {
+					players.remove(i);
+					System.out.println("Player Found");
+					break;
+				}
 			}
-
+			instance.setTableAsList(instance.table, players);
+		} catch (Exception e) {
+			Dialogs.showError("An error occurred while updating player data.");
 		}
-
-		instance.setTableAsList(instance.table, players);
 	}
 
 	public void startServer() throws IOException {

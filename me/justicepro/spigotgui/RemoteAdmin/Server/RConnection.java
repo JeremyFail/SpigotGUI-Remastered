@@ -38,10 +38,8 @@ public class RConnection extends Thread implements Console {
 	public void run()
 	{
 		DataInputStream input = null;
-		DataOutputStream output = null;
 		try {
 			input = new DataInputStream(socket.getInputStream());
-			output = new DataOutputStream(socket.getOutputStream());
 		} catch (IOException e1) {
 			// TODO Auto-generated catch block
 			e1.printStackTrace();

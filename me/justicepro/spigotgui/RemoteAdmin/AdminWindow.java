@@ -149,12 +149,12 @@ public class AdminWindow extends JFrame implements PacketHandler {
 		panel_6.setLayout(null);
 
 		minRam = new JSpinner();
-		minRam.setModel(new SpinnerNumberModel(new Integer(1024), null, null, new Integer(1)));
+		minRam.setModel(new SpinnerNumberModel(Integer.valueOf(1024), null, null, Integer.valueOf(1)));
 		minRam.setBounds(12, 40, 100, 22);
 		panel_6.add(minRam);
 
 		maxRam = new JSpinner();
-		maxRam.setModel(new SpinnerNumberModel(new Integer(1024), null, null, new Integer(1)));
+		maxRam.setModel(new SpinnerNumberModel(Integer.valueOf(1024), null, null, Integer.valueOf(1)));
 		maxRam.setBounds(12, 102, 95, 22);
 		panel_6.add(maxRam);
 
@@ -312,7 +312,7 @@ public class AdminWindow extends JFrame implements PacketHandler {
 		addWindowListener(new WindowAdapter() {
 			@Override
 			public void windowClosing(WindowEvent arg0) {
-				client.stop();
+				client.shutdown();
 			}
 		});
 
@@ -343,9 +343,8 @@ public class AdminWindow extends JFrame implements PacketHandler {
 	public void onPacketRecievedClient(Packet packet, RClient client) {
 
 		if (packet.getPacketName().equalsIgnoreCase("motd")) {
-			PacketMotd motd = new PacketMotd(packet);
+			new PacketMotd(packet);
 			login.onMotdSent();
-
 		}
 
 		if (packet.getPacketName().equalsIgnoreCase("serverchat_send")) {

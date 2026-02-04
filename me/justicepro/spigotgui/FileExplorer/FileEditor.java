@@ -29,8 +29,7 @@ public class FileEditor extends JFrame {
 	private JTextArea textArea;
 	
 	private File openedFile;
-	private boolean saved = false;
-	
+
 	/**
 	 * Create the frame.
 	 */
@@ -56,7 +55,6 @@ public class FileEditor extends JFrame {
 				if (e.getKeyCode()==KeyEvent.VK_S && e.isControlDown()) {
 					try {
 						saveFile();
-						saved = true;
 						JOptionPane.showMessageDialog(null, "Saved File");
 					} catch (IOException e1) {
 						// TODO Auto-generated catch block
@@ -81,7 +79,6 @@ public class FileEditor extends JFrame {
 				newFile = false;
 				openedFile = null;
 				setTitle("New - File Editor");
-				saved = true;
 			}
 		});
 		mnFile.add(mntmNew);
@@ -97,7 +94,6 @@ public class FileEditor extends JFrame {
 					File file = chooser.getSelectedFile();
 					try {
 						openFile(file);
-						saved = true;
 					} catch (IOException e1) {
 						// TODO Auto-generated catch block
 						e1.printStackTrace();
@@ -114,7 +110,6 @@ public class FileEditor extends JFrame {
 			public void actionPerformed(ActionEvent e) {
 				try {
 					saveFile();
-					saved = true;
 				} catch (IOException e1) {
 					// TODO Auto-generated catch block
 					e1.printStackTrace();

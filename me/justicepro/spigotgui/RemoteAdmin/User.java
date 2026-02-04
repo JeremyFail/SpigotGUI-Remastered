@@ -12,6 +12,7 @@ import java.util.HashMap;
 
 import me.justicepro.spigotgui.RemoteAdmin.Server.RConnection;
 import me.justicepro.spigotgui.RemoteAdmin.Server.RServer;
+import me.justicepro.spigotgui.Utils.Dialogs;
 
 public class User implements Serializable {
 	
@@ -172,7 +173,7 @@ public class User implements Serializable {
 	 * @param user The target user.
 	 */
 	public static void updateUser(User user) {
-		ArrayList<User> urs = (ArrayList<User>) users.clone();
+		ArrayList<User> urs = new ArrayList<>(users);
 
 		for (int i = 0; i < urs.size(); i++) {
 			User u = urs.get(i);
@@ -218,9 +219,26 @@ public class User implements Serializable {
 	 */
 	public static ArrayList<User> loadUsers(File file) throws IOException, ClassNotFoundException {
 		ObjectInputStream input = new ObjectInputStream(new FileInputStream(file));
-		ArrayList<User> urs = (ArrayList<User>) input.readObject();
-		input.close();
-		return urs;
+		try {
+			Object obj = input.readObject();
+			if (!(obj instanceof ArrayList)) {
+				Dialogs.showError("Invalid data", "User data file is invalid or corrupted.");
+				return new ArrayList<>();
+			}
+			ArrayList<?> raw = (ArrayList<?>) obj;
+			ArrayList<User> urs = new ArrayList<>(raw.size());
+			for (Object o : raw) {
+				if (o instanceof User) {
+					urs.add((User) o);
+				}
+			}
+			if (urs.size() != raw.size()) {
+				Dialogs.showError("Invalid data", "User data file contained invalid entries; some were skipped.");
+			}
+			return urs;
+		} finally {
+			input.close();
+		}
 	}
 	
 	/**
@@ -265,7 +283,7 @@ public class User implements Serializable {
 	 */
 	public static boolean removeUser(String username) {
 
-		ArrayList<User> u = (ArrayList<User>) users.clone();
+		ArrayList<User> u = new ArrayList<>(users);
 
 		for (int i = 0; i < u.size(); i++) {
 			User user = u.get(i);
