@@ -1,9 +1,5 @@
 package me.justicepro.spigotgui;
 
-import javax.swing.LookAndFeel;
-
-import com.sun.java.swing.plaf.windows.WindowsLookAndFeel;
-
 public enum Theme {
 	Graphite("Graphite", "com.jtattoo.plaf.graphite.GraphiteLookAndFeel"),
 	Aluminium("Aluminium", "com.jtattoo.plaf.aluminium.AluminiumLookAndFeel"),
