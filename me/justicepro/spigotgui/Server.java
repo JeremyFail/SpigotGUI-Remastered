@@ -3,6 +3,7 @@ package me.justicepro.spigotgui;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
 import java.util.Scanner;
 
 public class Server {
@@ -32,24 +33,20 @@ public class Server {
 			System.out.println("Started Server");
 			
 			if (isWindows) {
-				process = Runtime.getRuntime().exec("cmd");
-
-				//PrintWriter output = new PrintWriter(process.getOutputStream(), true);
-
-//				output.println("java " + switches + " -jar \"" + jar.getAbsolutePath() + "\" " + arguments + " & exit");
-
-
+				ProcessBuilder pb = new ProcessBuilder("cmd");
+				pb.environment().put("TERM", "xterm-256color");
+				process = pb.start();
 			}else {
-				process = Runtime.getRuntime().exec("sh");
-
-				//PrintWriter output = new PrintWriter(process.getOutputStream(), true);
-
-//				output.println("java " + switches + " -jar \"" + jar.getAbsolutePath() + "\" " + arguments + " & exit");
+				ProcessBuilder pb = new ProcessBuilder("sh");
+				pb.environment().put("TERM", "xterm-256color");
+				process = pb.start();
 			}
 			
 			PrintWriter output = new PrintWriter(process.getOutputStream(), true);
-			
-			output.println("java " + switches + " -jar \"" + jar.getAbsolutePath() + "\" " + arguments + " & exit");
+			// Paper/Adventure: force ANSI colors when stdout is a pipe. Ignored by vanilla/Spigot/Sponge (harmless).
+			// TERM=xterm-256color above may help other servers that check it for console colors.
+			String ansiFlag = " -Dnet.kyori.ansi.colorLevel=indexed16";
+			output.println("java " + switches + ansiFlag + " -jar \"" + jar.getAbsolutePath() + "\" " + arguments + " & exit");
 			
 			Thread thread = createThread();
 			
@@ -83,7 +80,8 @@ public class Server {
 		
 		return new Thread(new Runnable() {
 			public void run() {
-				Scanner scanner = new Scanner(process.getInputStream());
+				// Use UTF-8 so § and ANSI escape sequences are preserved
+				Scanner scanner = new Scanner(process.getInputStream(), StandardCharsets.UTF_8.name());
 				while (isRunning()) {
 
 					while (scanner.hasNextLine()) {

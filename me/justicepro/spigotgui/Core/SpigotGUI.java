@@ -50,7 +50,7 @@ import javax.swing.JScrollPane;
 import javax.swing.JSpinner;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
-import javax.swing.JTextArea;
+import javax.swing.JTextPane;
 import javax.swing.JTextField;
 import javax.swing.LayoutStyle.ComponentPlacement;
 import javax.swing.SpinnerNumberModel;
@@ -86,6 +86,7 @@ import me.justicepro.spigotgui.RemoteAdmin.Permission;
 import me.justicepro.spigotgui.RemoteAdmin.ServerWindow;
 import me.justicepro.spigotgui.RemoteAdmin.PacketHandlers.ServerHandler;
 import me.justicepro.spigotgui.RemoteAdmin.Server.RServer;
+import me.justicepro.spigotgui.Utils.ConsoleStyleHelper;
 import me.justicepro.spigotgui.Utils.Player;
 
 public class SpigotGUI extends JFrame {
@@ -95,7 +96,8 @@ public class SpigotGUI extends JFrame {
 
 	private JComboBox<String> exitTimer;
 
-	private JTextArea consoleTextArea;
+	private JTextPane consoleTextPane;
+	private ConsoleStyleHelper consoleStyleHelper;
 	private JLabel status;
 
 	private JSpinner maxRam;
@@ -107,9 +109,22 @@ public class SpigotGUI extends JFrame {
 
 	public static Server server = null;
 
-	public ImageIcon imgactive = new ImageIcon(ImageIO.read(getClass().getResourceAsStream("/Active Small.png")));
-	public ImageIcon imgnotactive = new ImageIcon(ImageIO.read(getClass().getResourceAsStream("/Not-Active Small.png")));
+	public ImageIcon imgactive = loadIcon("/Active Small.png");
+	public ImageIcon imgnotactive = loadIcon("/Not-Active Small.png");
 	private JTable table;
+
+	/** Load an image from classpath; returns null if missing so the app still starts. */
+	private static ImageIcon loadIcon(String path) {
+		try {
+			java.io.InputStream in = SpigotGUI.class.getResourceAsStream(path);
+			if (in != null) {
+				return new ImageIcon(ImageIO.read(in));
+			}
+		} catch (Exception e) {
+			// ignore — icon optional
+		}
+		return null;
+	}
 
 	public static SpigotGUI instance;
 
@@ -123,13 +138,15 @@ public class SpigotGUI extends JFrame {
 	private JSpinner fontSpinner;
 	
 	private JCheckBox chckbxConsoleForsay;
+	private JCheckBox consoleDarkModeCheckBox;
+	private JCheckBox disableConsoleColorsCheckBox;
 
 	public static File jarFile;
 
 	public static ServerHandler serverHandler = new ServerHandler();
 
-	public static final String versionTag = "1.1";
-	public static final String versionName = "Ymerejliaf";
+	public static final String versionTag = "1.1.1";
+	public static final String versionName = "2026";
 
 	//public static ServerSettings serverSettings;
 
@@ -200,7 +217,7 @@ public class SpigotGUI extends JFrame {
 
 				String theme = themeBox.getItemAt(themeBox.getSelectedIndex());
 				
-				Settings s = new Settings(new ServerSettings(minRam.getValue(), maxRam.getValue(), customArgsTxt.getText(), customSwitchesTxt.getText(), jarFile), settings.getTheme(), fontSpinner.getValue());
+				Settings s = new Settings(new ServerSettings(minRam.getValue(), maxRam.getValue(), customArgsTxt.getText(), customSwitchesTxt.getText(), jarFile), settings.getTheme(), fontSpinner.getValue(), consoleDarkModeCheckBox.isSelected(), !disableConsoleColorsCheckBox.isSelected());
 				
 				for (Theme t : Theme.values()) {
 
@@ -239,13 +256,17 @@ public class SpigotGUI extends JFrame {
 
 		JScrollPane scrollPane = new JScrollPane();
 
-		consoleTextArea = new JTextArea();
-		consoleTextArea.setFont(new Font("Dialog", Font.PLAIN, (int) settings.getFontSize()));
-		consoleTextArea.setEditable(false);
-		consoleTextArea.setLineWrap(true);
-		DefaultCaret caret = (DefaultCaret)consoleTextArea.getCaret();
+		int fontSize = (int) settings.getFontSize();
+		Font consoleFont = getConsoleMonospaceFont(fontSize);
+		consoleTextPane = new JTextPane();
+		consoleTextPane.setFont(consoleFont);
+		consoleTextPane.setEditable(false);
+		consoleTextPane.setMargin(new java.awt.Insets(4, 4, 4, 4));
+		consoleStyleHelper = new ConsoleStyleHelper(consoleTextPane, consoleFont, settings.isConsoleDarkMode(), 500_000);
+		consoleStyleHelper.setColorsEnabled(settings.isConsoleColorsEnabled());
+		DefaultCaret caret = (DefaultCaret) consoleTextPane.getCaret();
 		caret.setUpdatePolicy(DefaultCaret.ALWAYS_UPDATE);
-		scrollPane.setViewportView(consoleTextArea);
+		scrollPane.setViewportView(consoleTextPane);
 
 		inputTxt = new JTextField();
 		inputTxt.addActionListener(new ActionListener() {
@@ -1864,7 +1885,11 @@ public class SpigotGUI extends JFrame {
 		fontSpinner = new JSpinner();
 		fontSpinner.addChangeListener(new ChangeListener() {
 			public void stateChanged(ChangeEvent arg0) {
-				consoleTextArea.setFont(new Font(consoleTextArea.getName(), consoleTextArea.getFont().getStyle(), (int) fontSpinner.getValue()));
+				Font newFont = getConsoleMonospaceFont((int) fontSpinner.getValue());
+				consoleTextPane.setFont(newFont);
+				if (consoleStyleHelper != null) {
+					consoleStyleHelper.setBaseFont(newFont);
+				}
 			}
 		});
 		
@@ -1888,7 +1913,7 @@ public class SpigotGUI extends JFrame {
 		JButton btnSetJarFile = new JButton("Set Server File");
 		btnSetJarFile.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				File jarDir = new File(ClassLoader.getSystemClassLoader().getResource(".").getPath().replaceAll("%20", " "));
+				File jarDir = getDefaultDirectory();
 				JFileChooser fileChooser = new JFileChooser();
 
 				fileChooser.setCurrentDirectory(jarDir);
@@ -1990,7 +2015,7 @@ public class SpigotGUI extends JFrame {
 
 		JScrollPane scrollPane_2 = new JScrollPane();
 
-		File jarDir = new File(ClassLoader.getSystemClassLoader().getResource(".").getPath().replaceAll("%20", " "));
+		File jarDir = getDefaultDirectory();
 
 		JList<String> fileList = new JList<String>();
 		FileModel fm = new FileModel(fileList);
@@ -2137,7 +2162,7 @@ public class SpigotGUI extends JFrame {
 		JPanel panel_5 = new JPanel();
 		tabbedPane.addTab("About/Help", null, panel_5, null);
 
-		JLabel lblCreatedByJusticepro = new JLabel("Created by JusticePro");
+		JLabel lblCreatedByJusticepro = new JLabel("By JusticePro, Ymerejliaf");
 
 		JButton btnGetTheOriginal = new JButton("Get the Original");
 		btnGetTheOriginal.addActionListener(new ActionListener() {
@@ -2179,6 +2204,28 @@ public class SpigotGUI extends JFrame {
 		
 		themeBox.setModel(new DefaultComboBoxModel(new String[] {"Change Theme", "Aluminium", "Aero", "Acryl", "Bernstein", "Fast", "Graphite", "HiFi", "Luna", "McWin", "Metal", "Mint", "Motif", "Noire", "Smart", "Texture", "Windows"}));
 
+		consoleDarkModeCheckBox = new JCheckBox("Console dark mode");
+		consoleDarkModeCheckBox.setSelected(settings.isConsoleDarkMode());
+		consoleDarkModeCheckBox.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				if (consoleStyleHelper != null) {
+					consoleStyleHelper.setDarkMode(consoleDarkModeCheckBox.isSelected());
+				}
+			}
+		});
+
+		disableConsoleColorsCheckBox = new JCheckBox("Disable console colors");
+		disableConsoleColorsCheckBox.setSelected(!settings.isConsoleColorsEnabled());
+		disableConsoleColorsCheckBox.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				if (consoleStyleHelper != null) {
+					consoleStyleHelper.setColorsEnabled(!disableConsoleColorsCheckBox.isSelected());
+				}
+			}
+		});
+
 		JButton btnHelp = new JButton("Help");
 		btnHelp.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
@@ -2208,6 +2255,14 @@ public class SpigotGUI extends JFrame {
 					.addContainerGap()
 					.addComponent(lblThemesByJtatoo, GroupLayout.PREFERRED_SIZE, 149, GroupLayout.PREFERRED_SIZE)
 					.addContainerGap(489, Short.MAX_VALUE))
+				.addGroup(gl_panel_5.createSequentialGroup()
+					.addContainerGap()
+					.addComponent(consoleDarkModeCheckBox)
+					.addContainerGap(489, Short.MAX_VALUE))
+				.addGroup(gl_panel_5.createSequentialGroup()
+					.addContainerGap()
+					.addComponent(disableConsoleColorsCheckBox)
+					.addContainerGap(489, Short.MAX_VALUE))
 		);
 		gl_panel_5.setVerticalGroup(
 			gl_panel_5.createParallelGroup(Alignment.TRAILING)
@@ -2223,7 +2278,11 @@ public class SpigotGUI extends JFrame {
 						.addComponent(themeBox, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE))
 					.addPreferredGap(ComponentPlacement.RELATED)
 					.addComponent(lblThemesByJtatoo, GroupLayout.PREFERRED_SIZE, 16, GroupLayout.PREFERRED_SIZE)
-					.addContainerGap(457, Short.MAX_VALUE))
+					.addPreferredGap(ComponentPlacement.RELATED)
+					.addComponent(consoleDarkModeCheckBox)
+					.addPreferredGap(ComponentPlacement.RELATED)
+					.addComponent(disableConsoleColorsCheckBox)
+					.addContainerGap(409, Short.MAX_VALUE))
 		);
 		panel_5.setLayout(gl_panel_5);
 
@@ -2257,17 +2316,51 @@ public class SpigotGUI extends JFrame {
 
 	public static Settings loadSettings() throws IOException, ClassNotFoundException, InstantiationException, IllegalAccessException, UnsupportedLookAndFeelException {
 		File file = new File("spigotgui.settings");
+		File backupFile = new File("spigotgui.settings.old");
 
 		if (!file.exists()) {
-			saveSettings(new Settings(ServerSettings.getDefault(), Theme.Graphite, 13));
+			// No main file — try backup (e.g. from a previous failed load)
+			if (backupFile.exists()) {
+				Settings fromBackup = tryLoadSettingsFrom(backupFile);
+				if (fromBackup != null) {
+					saveSettings(fromBackup); // migrate to new format on main file
+					return fromBackup;
+				}
+			}
+			Settings defaults = new Settings(ServerSettings.getDefault(), Theme.Graphite, 13, false, true);
+			saveSettings(defaults);
+			return defaults;
 		}
 
-		ObjectInputStream input = new ObjectInputStream(new FileInputStream(file));
+		// Try main file first
+		Settings settings = tryLoadSettingsFrom(file);
+		if (settings != null) {
+			return settings;
+		}
 
-		Settings settings = (Settings) input.readObject();
-		input.close();
+		// Main file failed (e.g. old/incompatible format) — try backup if it exists
+		if (backupFile.exists()) {
+			settings = tryLoadSettingsFrom(backupFile);
+			if (settings != null) {
+				saveSettings(settings); // migrate to new format
+				return settings;
+			}
+		}
 
-		return settings;
+		// Both failed — backup main file so we don't lose it, then use defaults
+		file.renameTo(backupFile);
+		Settings defaults = new Settings(ServerSettings.getDefault(), Theme.Graphite, 13, false, true);
+		saveSettings(defaults);
+		return defaults;
+	}
+
+	/** Try to deserialize Settings from a file; returns null on any error. */
+	private static Settings tryLoadSettingsFrom(File file) {
+		try (ObjectInputStream input = new ObjectInputStream(new FileInputStream(file))) {
+			return (Settings) input.readObject();
+		} catch (IOException | ClassNotFoundException e) {
+			return null;
+		}
 	}
 
 	/** Add nodes from under "dir" into curTop. Highly recursive. */
@@ -2366,7 +2459,12 @@ public class SpigotGUI extends JFrame {
 	}
 
 	public void startServer(String args, String switches) throws IOException {
-		consoleTextArea.setText("");
+		try {
+			javax.swing.text.Document doc = consoleTextPane.getDocument();
+			doc.remove(0, doc.getLength());
+		} catch (javax.swing.text.BadLocationException e) {
+			// ignore
+		}
 		File eula = new File("eula.txt");
 
 		if (!eula.exists()) {
@@ -2452,8 +2550,32 @@ public class SpigotGUI extends JFrame {
 	}
 
 	public void addToConsole(String message) {
-		consoleTextArea.setText(consoleTextArea.getText() + message + "\n");
+		if (consoleStyleHelper != null) {
+			consoleStyleHelper.appendLine(message);
+		}
 	}
+
+	/** Returns a Unicode-friendly monospace font for the console. */
+	private static Font getConsoleMonospaceFont(int size) {
+		String[] preferred = { "Consolas", "DejaVu Sans Mono", "Monospaced", "Courier New" };
+		for (String name : preferred) {
+			Font f = new Font(name, Font.PLAIN, size);
+			if (name.equals(f.getFamily())) {
+				return f;
+			}
+		}
+		return new Font(Font.MONOSPACED, Font.PLAIN, size);
+	}
+
+	/** Default directory for file browser and choosers; works when run from IDE or from JAR. */
+	private static File getDefaultDirectory() {
+		java.net.URL url = ClassLoader.getSystemClassLoader().getResource(".");
+		if (url != null) {
+			return new File(url.getPath().replaceAll("%20", " "));
+		}
+		return new File(System.getProperty("user.dir", "."));
+	}
+
 	private static void addPopup(Component component, final JPopupMenu popup) {
 		component.addMouseListener(new MouseAdapter() {
 			public void mousePressed(MouseEvent e) {
@@ -2518,7 +2640,7 @@ public class SpigotGUI extends JFrame {
 				}
 				restart = false;
 			}else {
-				setTitle("SpigotGUI Remastered (" + versionTag + ")");
+				setTitle("SpigotGUI Remastered (" + versionTag + " \"" + versionName + "\")");
 				try {
 					setActive(false);
 				} catch (IOException e) {
@@ -2570,9 +2692,9 @@ public class SpigotGUI extends JFrame {
 		public void setVersionDisplay() {
 
 			if (getVersion() != null) {
-				setTitle("SpigotGUI Remastered (" + versionTag + ") - " + getVersion().getName() + " API [" + getServerType().getName() + "]");
+				setTitle("SpigotGUI Remastered (" + versionTag + " \"" + versionName + "\") - " + getVersion().getName() + " API [" + getServerType().getName() + "]");
 			}else {
-				setTitle("SpigotGUI Remastered (" + versionTag + ") - [" + getServerType().getName() + "]");
+				setTitle("SpigotGUI Remastered (" + versionTag + " \"" + versionName + "\") - [" + getServerType().getName() + "]");
 			}
 
 		}
