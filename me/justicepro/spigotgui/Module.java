@@ -6,7 +6,6 @@ import java.io.InputStream;
 import javax.swing.JMenuItem;
 
 import me.justicepro.spigotgui.Api.ServerType;
-import me.justicepro.spigotgui.Api.Version;
 import me.justicepro.spigotgui.Core.SpigotGUI;
 import me.justicepro.spigotgui.RemoteAdmin.Permission;
 import me.justicepro.spigotgui.RemoteAdmin.User;
@@ -15,7 +14,6 @@ import me.justicepro.spigotgui.RemoteAdmin.Client.RClient;
 public class Module {
 	
 	private String name;
-	private Version version;
 	private ServerType serverType = ServerType.Unknown;
 	
 	/**
@@ -31,14 +29,6 @@ public class Module {
 	 */
 	public String getName() {
 		return name;
-	}
-	
-	/**
-	 * The detected version
-	 * @return The version of the running server.
-	 */
-	public Version getVersion() {
-		return version;
 	}
 	
 	/**
@@ -95,238 +85,54 @@ public class Module {
 			// Version example: [bootstrap] Loading Paper 1.21.11-55-main@b36b49a (2025-12-26T16:47:57Z) for Minecraft 1.21.11
 			onPaperVersionDetected(message.split("Loading Paper ")[1].split(" ")[0]);
 		}
-		
-		if (version != null) {
-			
-			/**
-			 * 1.7 Handler
-			 */
-			if (version.equals(Version.V17)) {
-				
-				if (message.startsWith("<")) {
-					onChatMessage(message.split("<")[1].split("> ")[1], message.split("<")[1].split(">")[0]);
-				}
-				
-				if (message.contains("issued server command: /")) {
-					onCommandSent(message.split(" issued server command: /")[1], message.split(" issued server command: /")[0]);
-				}
-				
-				if (message.contains(" logged in with entity id ")) {
-					onPlayerJoin(message.split("\\[/")[0], message.split("\\[/")[1].split(":")[0]);
-				}
-				
-				
-				if (message.contains(" lost connection: ")) {
-					if (isBukkit()) {
-						onPlayerLeave(message.split(" lost connection: ")[0], message.split(" lost connection: ")[1]);
-					}else {
-						onPlayerLeave(message.split(" lost connection: ")[0], message.split(" lost connection: ")[1].split("TextComponent\\{text='")[1].split("'")[0]);
-					}
-				}
-				
-				if (message.startsWith("Done ") && message.endsWith("! For help, type \"help\" or \"?\"")) {
-					onServerReady();
-				}
-				
-			}
-			
-			/**
-			 * 1.8 Handler
-			 */
-			if (version.equals(Version.V18)) {
-				
-				if (message.startsWith("<")) {
-					onChatMessage(message.split("<")[1].split("> ")[1], message.split("<")[1].split(">")[0]);
-				}
-				
-				if (message.contains("issued server command: /")) {
-					onCommandSent(message.split(" issued server command: /")[1], message.split(" issued server command: /")[0]);
-				}
-				
-				if (message.contains(" logged in with entity id ")) {
-					onPlayerJoin(message.split("\\[/")[0], message.split("\\[/")[1].split(":")[0]);
-				}
-				
-				if (message.contains(" lost connection: ")) {
-					if (isBukkit()) {
-						onPlayerLeave(message.split(" lost connection: ")[0], message.split(" lost connection: ")[1]);
-					}else {
-						onPlayerLeave(message.split(" lost connection: ")[0], message.split(" lost connection: ")[1].split("TextComponent\\{text='")[1].split("'")[0]);
-					}
-				}
-				
-				if (message.startsWith("Done ") && message.endsWith("! For help, type \"help\" or \"?\"")) {
-					onServerReady();
-				}
-				
-			}
-			
-			/**
-			 * 1.9 Handler
-			 */
-			if (version.equals(Version.V19)) {
-				
-				if (message.startsWith("<")) {
-					onChatMessage(message.split("<")[1].split("> ")[1], message.split("<")[1].split(">")[0]);
-				}
-				
-				if (message.contains("issued server command: /")) {
-					onCommandSent(message.split(" issued server command: /")[1], message.split(" issued server command: /")[0]);
-				}
-				
-				if (message.contains(" logged in with entity id ")) {
-					onPlayerJoin(message.split("\\[/")[0], message.split("\\[/")[1].split(":")[0]);
-				}
-				
-				if (message.contains(" lost connection: ")) {
-					if (isBukkit()) {
-						onPlayerLeave(message.split(" lost connection: ")[0], message.split(" lost connection: ")[1]);
-					}else {
-						onPlayerLeave(message.split(" lost connection: ")[0], message.split(" lost connection: ")[1].split("TextComponent\\{text='")[1].split("'")[0]);
-					}
-				}
-				
-				if (message.startsWith("Done ") && message.endsWith("! For help, type \"help\" or \"?\"")) {
-					onServerReady();
-				}
-				
-			}
-			
-			/**
-			 * 1.10 Handler
-			 */
-			if (version.equals(Version.V110)) {
-				
-				if (message.startsWith("<")) {
-					onChatMessage(message.split("<")[1].split("> ")[1], message.split("<")[1].split(">")[0]);
-				}
-				
-				if (message.contains("issued server command: /")) {
-					onCommandSent(message.split(" issued server command: /")[1], message.split(" issued server command: /")[0]);
-				}
-				
-				if (message.contains(" logged in with entity id ")) {
-					onPlayerJoin(message.split("\\[/")[0], message.split("\\[/")[1].split(":")[0]);
-				}
-				
-				if (message.contains(" lost connection: ")) {
-					if (isBukkit()) {
-						onPlayerLeave(message.split(" lost connection: ")[0], message.split(" lost connection: ")[1]);
-					}else {
-						onPlayerLeave(message.split(" lost connection: ")[0], message.split(" lost connection: ")[1].split("TextComponent\\{text='")[1].split("'")[0]);
-					}
-				}
-				
-				if (message.startsWith("Done ") && message.endsWith("! For help, type \"help\" or \"?\"")) {
-					onServerReady();
-				}
-				
-			}
-			
-			/**
-			 * 1.11 Handler
-			 */
-			if (version.equals(Version.V111)) {
-				
-				if (message.startsWith("<")) {
-					onChatMessage(message.split("<")[1].split("> ")[1], message.split("<")[1].split(">")[0]);
-				}
-				
-				if (message.contains("issued server command: /")) {
-					onCommandSent(message.split(" issued server command: /")[1], message.split(" issued server command: /")[0]);
-				}
-				
-				if (message.contains(" logged in with entity id ")) {
-					onPlayerJoin(message.split("\\[/")[0], message.split("\\[/")[1].split(":")[0]);
-				}
-				
-				if (message.contains(" lost connection: ")) {
-					if (isBukkit()) {
-						onPlayerLeave(message.split(" lost connection: ")[0], message.split(" lost connection: ")[1]);
-					}else {
-						onPlayerLeave(message.split(" lost connection: ")[0], message.split(" lost connection: ")[1].split("TextComponent\\{text='")[1].split("'")[0]);
-					}
-				}
-				
-				if (message.startsWith("Done ") && message.endsWith("! For help, type \"help\" or \"?\"")) {
-					onServerReady();
-				}
-				
-			}
-			
-			/**
-			 * 1.12 Handler
-			 */
-			if (version.equals(Version.V112)) {
-				
-				if (message.startsWith("<")) {
-					onChatMessage(message.split("<")[1].split("> ")[1], message.split("<")[1].split(">")[0]);
-				}
-				
-				if (message.contains("issued server command: /")) {
-					onCommandSent(message.split(" issued server command: /")[1], message.split(" issued server command: /")[0]);
-				}
-				
-				if (message.contains(" logged in with entity id ")) {
-					onPlayerJoin(message.split("\\[/")[0], message.split("\\[/")[1].split(":")[0]);
-				}
-				
-				if (message.contains(" lost connection: ")) {
-					onPlayerLeave(message.split(" lost connection: ")[0], message.split(" lost connection: ")[1]);
-				}
-				
-				if (message.startsWith("Done ") && message.endsWith("! For help, type \"help\" or \"?\"")) {
-					onServerReady();
-				}
-				
-			}
-			
-			/**
-			 * 1.13 Handler
-			 */
-			if (version.equals(Version.V113)) {
-				
-				if (message.startsWith("<")) {
-					onChatMessage(message.split("<")[1].split("> ")[1], message.split("<")[1].split(">")[0]);
-				}
-				
-				if (message.contains("issued server command: /")) {
-					onCommandSent(message.split(" issued server command: /")[1], message.split(" issued server command: /")[0]);
-				}
-				
-				if (message.contains(" logged in with entity id ")) {
-					onPlayerJoin(message.split("\\[/")[0], message.split("\\[/")[1].split(":")[0]);
-				}
-				
-				if (message.contains(" lost connection: ")) {
-					onPlayerLeave(message.split(" lost connection: ")[0], message.split(" lost connection: ")[1]);
-				}
-				
-				if (message.startsWith("Done ") && message.endsWith("! For help, type \"help\"")) {
-					onServerReady();
-				}
-				
-			}
-			
+
+		// Single handler for all server types: detect format at runtime (e.g. TextComponent in disconnect reason)
+		if (message.startsWith("<") && message.contains("> ")) {
+			try {
+				String afterBracket = message.split("<", 2)[1];
+				String player = afterBracket.split("> ")[0];
+				String chatMsg = afterBracket.split("> ", 2)[1];
+				onChatMessage(chatMsg, player);
+			} catch (Exception ignore) {}
 		}
-		
+		if (message.contains("issued server command: /")) {
+			try {
+				String cmd = message.split(" issued server command: /", 2)[1];
+				String player = message.split(" issued server command: /")[0].trim();
+				onCommandSent(cmd, player);
+			} catch (Exception ignore) {}
+		}
+		if (message.contains(" logged in with entity id ")) {
+			try {
+				String name = message.split("\\[/")[0].trim();
+				String ip = message.split("\\[/")[1].split(":")[0].trim();
+				onPlayerJoin(name, ip);
+			} catch (Exception ignore) {}
+		}
+		if (message.contains(" lost connection: ")) {
+			try {
+				String[] parts = message.split(" lost connection: ", 2);
+				String player = parts[0].trim();
+				String reason = parts.length > 1 ? parts[1] : "";
+				if (reason.contains("TextComponent\\{text='")) {
+					try {
+						reason = reason.split("TextComponent\\\\\\{text='")[1].split("'")[0];
+					} catch (Exception e2) {}
+				}
+				onPlayerLeave(player, reason);
+			} catch (Exception ignore) {}
+		}
+		if (message.startsWith("Done ") && (message.endsWith("! For help, type \"help\" or \"?\"") || message.endsWith("! For help, type \"help\""))) {
+			onServerReady();
+		}
 	}
-	
+
 	/**
-	 * When the version has been detected.
-	 * @param version The version string
-	 */
+     * When the version has been detected.
+     * @param version The version string
+     */
 	public void onVersionDetected(String version) {
-		
-		for (Version v : Version.values()) {
-			
-			if (version.startsWith(v.getName())) {
-				this.version = v;
-				break;
-			}
-			
-		}
-		
+		// We don't really care about the version, we just need to know when it's detected
 	}
 	
 	/**
@@ -417,7 +223,6 @@ public class Module {
 	 */
 	public void onServerClosed() {
 		serverType = ServerType.Unknown;
-		version = null;
 	}
 	
 	/**

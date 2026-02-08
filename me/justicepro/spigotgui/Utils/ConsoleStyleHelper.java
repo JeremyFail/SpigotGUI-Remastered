@@ -4,6 +4,8 @@ import java.awt.Color;
 import java.awt.Font;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.swing.JTextPane;
 import javax.swing.text.BadLocationException;
@@ -20,6 +22,10 @@ public final class ConsoleStyleHelper {
 
     /** Custom document attribute: Integer (original RGB) for this run, so we can restore color when "disable colors" is toggled off. */
     public static final Object CANONICAL_ORIGINAL_RGB = new String("ConsoleStyleHelper.canonicalOriginalRGB");
+    /** Attribute key for clickable links: value is the URL String. When present, text is underlined and click opens the URL. */
+    public static final Object LINK_URL = new String("ConsoleStyleHelper.linkUrl");
+
+    private static final Pattern URL_PATTERN = Pattern.compile("https?://[^\\s<>\"']+");
 
     /** Default text color for light background — black so it's readable on white */
     private static final Color DEFAULT_FG_LIGHT = Color.BLACK;
@@ -281,17 +287,39 @@ public final class ConsoleStyleHelper {
 
     private void flush(StringBuilder plain, StyledDocument doc) throws BadLocationException {
         if (plain.length() == 0) return;
-        SimpleAttributeSet attrs = new SimpleAttributeSet();
-        StyleConstants.setFontFamily(attrs, baseFont.getFamily());
-        StyleConstants.setFontSize(attrs, baseFont.getSize());
-        StyleConstants.setBold(attrs, currentBold);
-        Color displayColor = colorsEnabled ? currentFg : defaultFg;
-        StyleConstants.setForeground(attrs, displayColor);
-        if (currentCanonicalRGB != null) {
-            attrs.addAttribute(CANONICAL_ORIGINAL_RGB, currentCanonicalRGB);
-        }
-        doc.insertString(doc.getLength(), plain.toString(), attrs);
+        String s = plain.toString();
         plain.setLength(0);
+        SimpleAttributeSet baseAttrs = new SimpleAttributeSet();
+        StyleConstants.setFontFamily(baseAttrs, baseFont.getFamily());
+        StyleConstants.setFontSize(baseAttrs, baseFont.getSize());
+        StyleConstants.setBold(baseAttrs, currentBold);
+        Color displayColor = colorsEnabled ? currentFg : defaultFg;
+        StyleConstants.setForeground(baseAttrs, displayColor);
+        if (currentCanonicalRGB != null) {
+            baseAttrs.addAttribute(CANONICAL_ORIGINAL_RGB, currentCanonicalRGB);
+        }
+        Matcher m = URL_PATTERN.matcher(s);
+        int lastEnd = 0;
+        while (m.find()) {
+            if (m.start() > lastEnd) {
+                doc.insertString(doc.getLength(), s.substring(lastEnd, m.start()), baseAttrs);
+            }
+            String url = m.group();
+            while (url.length() > 0 && ".,;:)!?'\"]".indexOf(url.charAt(url.length() - 1)) >= 0) {
+                url = url.substring(0, url.length() - 1);
+            }
+            SimpleAttributeSet linkAttrs = new SimpleAttributeSet(baseAttrs);
+            StyleConstants.setUnderline(linkAttrs, true);
+            linkAttrs.addAttribute(LINK_URL, url);
+            doc.insertString(doc.getLength(), s.substring(m.start(), m.start() + url.length()), linkAttrs);
+            if (m.end() > m.start() + url.length()) {
+                doc.insertString(doc.getLength(), s.substring(m.start() + url.length(), m.end()), baseAttrs);
+            }
+            lastEnd = m.end();
+        }
+        if (lastEnd < s.length()) {
+            doc.insertString(doc.getLength(), s.substring(lastEnd), baseAttrs);
+        }
     }
 
     private void applyAnsi(String code) {

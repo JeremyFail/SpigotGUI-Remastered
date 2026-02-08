@@ -2,14 +2,27 @@ package me.justicepro.spigotgui.Core;
 
 import java.awt.BorderLayout;
 import java.awt.Component;
+import java.awt.Cursor;
 import java.awt.Dimension;
+import java.awt.Color;
+import java.awt.FlowLayout;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.Rectangle;
+import java.awt.RenderingHints;
+import java.awt.geom.Arc2D;
+import java.awt.geom.Ellipse2D;
+import java.awt.geom.GeneralPath;
 import java.awt.EventQueue;
 import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.awt.Point;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.AdjustmentEvent;
+import java.awt.event.AdjustmentListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
@@ -17,10 +30,12 @@ import java.awt.event.WindowEvent;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.awt.Desktop;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Inet4Address;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
@@ -28,13 +43,12 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Vector;
 
-import javax.imageio.ImageIO;
+import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.DefaultListModel;
 import javax.swing.GroupLayout;
 import javax.swing.GroupLayout.Alignment;
-import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
@@ -49,10 +63,13 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
+import javax.swing.JViewport;
 import javax.swing.JSpinner;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
+import javax.swing.Timer;
 import javax.swing.JTextPane;
+import javax.swing.ToolTipManager;
 import javax.swing.JTextField;
 import javax.swing.LayoutStyle.ComponentPlacement;
 import javax.swing.SpinnerNumberModel;
@@ -68,7 +85,9 @@ import javax.swing.event.PopupMenuEvent;
 import javax.swing.event.PopupMenuListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.text.BadLocationException;
 import javax.swing.text.DefaultCaret;
+import javax.swing.text.StyledDocument;
 import javax.swing.tree.DefaultMutableTreeNode;
 
 import me.justicepro.spigotgui.JModulePanel;
@@ -99,18 +118,27 @@ public class SpigotGUI extends JFrame {
 	private static final int MIN_SIZE_BASE_HEIGHT = 400;
 
 	private JPanel contentPane;
-	private JTextField inputTxt;
+	private JTextField consoleCommandInput;
 
-	private JComboBox<String> exitTimer;
+	private JSpinner shutdownCountdownSpinner;
 
 	private JTextPane consoleTextPane;
 	private ConsoleStyleHelper consoleStyleHelper;
-	private JLabel status;
+	/** Scroll pane wrapping the console text pane; used for stick-to-bottom behavior. */
+	private JScrollPane consoleScrollPane;
+	/** When true, new console output scrolls to the bottom of the console view. */
+	private volatile boolean consoleStickToBottom = true;
+	/** Ignore scroll bar listener until this time (ms); avoids treating programmatic scroll or append-induced scroll as user scroll. */
+	private volatile long ignoreScrollBarUntil = 0;
+	/** True while we're scrolling from the command timer so we don't re-enable sticky. */
+	private volatile boolean scrollingFromCommand = false;
+	/** Drawn green/red circle for server status; replaces previous image-based icon. */
+	private StatusCirclePanel serverStatusCircle;
 
 	private JSpinner maxRam;
 	private JSpinner minRam;
 
-	private JLabel lblStatus;
+	private JLabel lblServerStatusText;
 
 	private JComboBox<String> themeBox;
 	/** Theme at app startup; used to decide if we can apply a new theme without restart (same family only). */
@@ -122,22 +150,11 @@ public class SpigotGUI extends JFrame {
 
 	public static Server server = null;
 
-	public ImageIcon imgactive = loadIcon("/Active Small.png");
-	public ImageIcon imgnotactive = loadIcon("/Not-Active Small.png");
-	private JTable table;
-
-	/** Load an image from classpath; returns null if missing so the app still starts. */
-	private static ImageIcon loadIcon(String path) {
-		try {
-			java.io.InputStream in = SpigotGUI.class.getResourceAsStream(path);
-			if (in != null) {
-				return new ImageIcon(ImageIO.read(in));
-			}
-		} catch (Exception e) {
-			// ignore — icon optional
-		}
-		return null;
-	}
+	private JButton btnStartServer;
+	private JButton btnStopServer;
+	private JButton btnRestartServer;
+	private JTable playersTable;
+	private JLabel lblPlayersOnlineCount;
 
 	public static SpigotGUI instance;
 
@@ -146,22 +163,39 @@ public class SpigotGUI extends JFrame {
 	private static Module module;
 
 	private boolean restart = false;
-	private JTextField customArgsTxt;
-	private JTextField customSwitchesTxt;
+	private JTextField customJvmArgsField;
+	private JTextField customJvmSwitchesField;
 	private JSpinner fontSpinner;
 	
-	private JCheckBox chckbxConsoleForsay;
+	private JCheckBox chkConsoleInputAsSay;
+	/** Manual control for console scroll sticky; visible only when Settings "Manual console scroll sticky" is on. */
+	private JCheckBox chkConsoleScrollSticky;
+	/** When true, sticky is controlled only by the manual checkbox; scroll bar does not update it. */
+	private boolean manualConsoleScrollStickyMode = false;
 	private JCheckBox consoleDarkModeCheckBox;
+	private JCheckBox manualConsoleScrollStickyCheckBox;
+	private JCheckBox serverButtonsUseTextCheckBox;
 	private JCheckBox disableConsoleColorsCheckBox;
 	private JCheckBox openFilesInSystemDefaultCheckBox;
 	private JComboBox<String> fileEditorThemeBox;
 	private FileModel fileModel;
+	/** Hovered index in the Files tab list for highlight; -1 when none. */
+	private int fileListHoverIndex = -1;
 
 	public static File jarFile;
 
 	public static ServerHandler serverHandler = new ServerHandler();
 
-	public static final String versionTag = "1.1.1";
+	public static final String versionTag = getVersionTag();
+
+	/** 
+	 * Get the version tag from the pom.xml file.
+	 * @return The version tag.
+	 */
+	private static String getVersionTag() {
+		String v = SpigotGUI.class.getPackage().getImplementationVersion();
+		return (v != null && !v.isEmpty()) ? v : "dev";
+	}
 
 	//public static ServerSettings serverSettings;
 
@@ -196,6 +230,9 @@ public class SpigotGUI extends JFrame {
 	 */
 	public SpigotGUI(Settings settings) throws IOException, ClassNotFoundException, InstantiationException, IllegalAccessException, UnsupportedLookAndFeelException {
 		ServerSettings serverSettings = settings.getServerSettings();
+		if (serverSettings.getJarFile() != null) {
+			jarFile = serverSettings.getJarFile();
+		}
 		if (initialThemeForSession == null) {
 			initialThemeForSession = settings.getTheme();
 		}
@@ -225,7 +262,7 @@ public class SpigotGUI extends JFrame {
 
 				String theme = themeBox.getItemAt(themeBox.getSelectedIndex());
 				
-				Settings s = new Settings(new ServerSettings(minRam.getValue(), maxRam.getValue(), customArgsTxt.getText(), customSwitchesTxt.getText(), jarFile), settings.getTheme(), fontSpinner.getValue(), consoleDarkModeCheckBox.isSelected(), !disableConsoleColorsCheckBox.isSelected(), openFilesInSystemDefaultCheckBox.isSelected(), getFileEditorThemeFromBox());
+				Settings s = new Settings(new ServerSettings(minRam.getValue(), maxRam.getValue(), customJvmArgsField.getText(), customJvmSwitchesField.getText(), jarFile), settings.getTheme(), fontSpinner.getValue(), consoleDarkModeCheckBox.isSelected(), !disableConsoleColorsCheckBox.isSelected(), openFilesInSystemDefaultCheckBox.isSelected(), getFileEditorThemeFromBox(), manualConsoleScrollStickyCheckBox != null && manualConsoleScrollStickyCheckBox.isSelected(), serverButtonsUseTextCheckBox != null && serverButtonsUseTextCheckBox.isSelected(), getShutdownCountdownSeconds());
 				
 				for (Theme t : Theme.values()) {
 
@@ -254,10 +291,10 @@ public class SpigotGUI extends JFrame {
 		contentPane = new JPanel();
 		contentPane.setBorder(new EmptyBorder(5, 5, 5, 5));
 		setContentPane(contentPane);
-		contentPane.setLayout(new BoxLayout(contentPane, BoxLayout.X_AXIS));
+		contentPane.setLayout(new BorderLayout(0, 0));
+		ToolTipManager.sharedInstance().setDismissDelay(15000);
 
 		JTabbedPane tabbedPane = new JTabbedPane(JTabbedPane.TOP);
-		contentPane.add(tabbedPane);
 
 		JPanel panel = new JPanel();
 		tabbedPane.addTab("Console", null, panel, null);
@@ -275,13 +312,43 @@ public class SpigotGUI extends JFrame {
 		DefaultCaret caret = (DefaultCaret) consoleTextPane.getCaret();
 		caret.setUpdatePolicy(DefaultCaret.ALWAYS_UPDATE);
 		scrollPane.setViewportView(consoleTextPane);
+		consoleScrollPane = scrollPane;
+		// Viewport ChangeListener can miss user scrolls; scroll bar AdjustmentListener fires when user scrolls (wheel or drag).
+		scrollPane.getVerticalScrollBar().addAdjustmentListener(new AdjustmentListener() {
+			@Override
+			public void adjustmentValueChanged(AdjustmentEvent e) {
+				updateConsoleStickToBottomFromScrollBar(e);
+			}
+		});
+		// Clickable links: open http(s) URLs in the default browser when clicked.
+		consoleTextPane.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseClicked(MouseEvent e) {
+				if (e.getButton() != MouseEvent.BUTTON1) return;
+				String url = getLinkUrlAt(consoleTextPane, e.getPoint());
+				if (url != null) {
+					try {
+						Desktop.getDesktop().browse(URI.create(url));
+					} catch (Exception ex) {
+						// ignore (e.g. no browser, invalid URL)
+					}
+				}
+			}
+		});
+		consoleTextPane.addMouseMotionListener(new MouseAdapter() {
+			@Override
+			public void mouseMoved(MouseEvent e) {
+				String url = getLinkUrlAt(consoleTextPane, e.getPoint());
+				consoleTextPane.setCursor(url != null ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
+			}
+		});
 
-		inputTxt = new JTextField();
-		inputTxt.setFont(consoleFont);
-		inputTxt.setMargin(new Insets(4, 6, 4, 6));
-		inputTxt.setPreferredSize(new Dimension(inputTxt.getPreferredSize().width, 26));
-		inputTxt.setMinimumSize(new Dimension(60, 26));
-		inputTxt.addActionListener(new ActionListener() {
+		consoleCommandInput = new JTextField();
+		consoleCommandInput.setFont(consoleFont);
+		consoleCommandInput.setMargin(new Insets(4, 6, 4, 6));
+		consoleCommandInput.setPreferredSize(new Dimension(consoleCommandInput.getPreferredSize().width, 26));
+		consoleCommandInput.setMinimumSize(new Dimension(60, 26));
+		consoleCommandInput.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent arg0) {
 
 				if (server != null) {
@@ -290,17 +357,26 @@ public class SpigotGUI extends JFrame {
 
 						try {
 							
-							if (chckbxConsoleForsay.isSelected()) {
-								server.sendCommand("say " + inputTxt.getText());
+							if (chkConsoleInputAsSay.isSelected()) {
+								server.sendCommand("say " + consoleCommandInput.getText());
 							}else {
-								server.sendCommand(inputTxt.getText());
+								server.sendCommand(consoleCommandInput.getText());
 							}
 							
 						} catch (ProcessException e) {
 							// TODO Auto-generated catch block
 							e.printStackTrace();
 						}
-						inputTxt.setText("");
+						consoleCommandInput.setText("");
+						// Scroll to bottom after a short delay so the server's echo of the command has time to appear.
+						Timer scrollAfterCommand = new Timer(150, e -> {
+							scrollingFromCommand = true;
+							ignoreScrollBarUntil = System.currentTimeMillis() + 250;
+							scrollConsoleToBottomOnly();
+							SwingUtilities.invokeLater(() -> scrollingFromCommand = false);
+						});
+						scrollAfterCommand.setRepeats(false);
+						scrollAfterCommand.start();
 
 					}
 
@@ -308,9 +384,9 @@ public class SpigotGUI extends JFrame {
 
 			}
 		});
-		inputTxt.setColumns(10);
+		consoleCommandInput.setColumns(10);
 
-		JButton btnStartServer = new JButton("Start Server");
+		btnStartServer = new JButton("Start Server");
 		btnStartServer.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 
@@ -339,210 +415,115 @@ public class SpigotGUI extends JFrame {
 			}
 		});
 
-		JButton btnStopServer = new JButton("Stop Server");
+		btnStopServer = new JButton("Stop Server");
+		btnStopServer.setEnabled(false);
 		btnStopServer.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 
 				if (server != null) {
-
 					if (server.isRunning()) {
-
-						try {
-							module.sendCommand("say Server Shutdown!");
-
-							if ( (exitTimer.getSelectedItem() + "").equalsIgnoreCase("No Exit Timer") ) {
-
-								try {
-									stopServer();
-								} catch (ProcessException ex) {
-									// TODO Auto-generated catch block
-									ex.printStackTrace();
-								}
-
-							}
-
-							if ( (exitTimer.getSelectedItem() + "").equalsIgnoreCase("1 Minute") ) {
-
-								new Thread(new Runnable() {
-									public void run() {
-										try {
-
-											module.sendCommand("say Stopping in 1 minute. Get to a safe spot.");
-
-											Thread.sleep(1000 * 30);
-
-											module.sendCommand("say Stopping in 30 seconds.");
-
-											Thread.sleep(1000 * 20);
-
-											for (int i = 10; i > 0; i--) {
-												module.sendCommand("say Stopping in " + i + " seconds.");
-												Thread.sleep(1000);
-											}
-
-										} catch (InterruptedException | ProcessException e1) {
-											// TODO Auto-generated catch block
-											e1.printStackTrace();
-										}
-										try {
-											stopServer();
-										} catch (ProcessException e) {
-											// TODO Auto-generated catch block
-											e.printStackTrace();
-										}
-
-									}
-								}).start();
-
-							}
-
-						} catch (ProcessException e1) {
-							// TODO Auto-generated catch block
-							e1.printStackTrace();
-						}
-
-					}else {
-						JOptionPane.showMessageDialog(null, "There are no servers running.");
+						runShutdownOrRestartCountdown(getShutdownCountdownSeconds(), false);
+					} else {
+						JOptionPane.showMessageDialog(SpigotGUI.this, "There are no servers running.");
 					}
 				}
-
 			}
 		});
 
-		status = new JLabel("");
+		serverStatusCircle = new StatusCirclePanel();
 
-		JLabel lblNewLabel = new JLabel("IP: " + Inet4Address.getLocalHost().getHostAddress());
+		String serverIP;
+		try {
+			serverIP = Inet4Address.getLocalHost().getHostAddress();
+		} catch (Exception e) {
+			serverIP = "—";
+		}
+		JLabel lblServerIP = new JLabel("Server IP: " + serverIP);
+		lblServerIP.setToolTipText("Local address for this machine. Players can use this to connect (e.g. for LAN).");
+		lblServerIP.setMinimumSize(new Dimension(200, 20));
+		lblServerIP.setPreferredSize(new Dimension(200, 20));
 
-		JButton btnRestartServer = new JButton("Restart Server");
+		btnRestartServer = new JButton("Restart Server");
+		btnRestartServer.setEnabled(false);
 		btnRestartServer.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 
 				if (server != null) {
-
 					if (server.isRunning()) {
-
-						try {
-							module.sendCommand("say Server Restart!");
-
-							if ( (exitTimer.getSelectedItem() + "").equalsIgnoreCase("No Exit Timer") ) {
-
-								try {
-									stopServer();
-									restart = true;
-								} catch (ProcessException ex) {
-									// TODO Auto-generated catch block
-									ex.printStackTrace();
-								}
-
-							}
-
-							if ( (exitTimer.getSelectedItem() + "").equalsIgnoreCase("1 Minute") ) {
-
-								new Thread(new Runnable() {
-									public void run() {
-										try {
-
-											module.sendCommand("say Restarting in 1 minute. Get to a safe spot.");
-
-											Thread.sleep(1000 * 30);
-
-											module.sendCommand("say Restarting in 30 seconds.");
-
-											Thread.sleep(1000 * 20);
-
-											for (int i = 10; i > 0; i--) {
-												module.sendCommand("say Restarting in " + i + " seconds.");
-												Thread.sleep(1000);
-											}
-
-										} catch (InterruptedException | ProcessException e1) {
-											// TODO Auto-generated catch block
-											e1.printStackTrace();
-										}
-										try {
-											stopServer();
-											restart = true;
-										} catch (ProcessException e) {
-											// TODO Auto-generated catch block
-											e.printStackTrace();
-										}
-
-									}
-								}).start();
-
-							}
-
-						} catch (ProcessException e1) {
-							// TODO Auto-generated catch block
-							e1.printStackTrace();
-						}
-
-					}else {
-						JOptionPane.showMessageDialog(null, "There are no servers running.");
+						runShutdownOrRestartCountdown(getShutdownCountdownSeconds(), true);
+					} else {
+						JOptionPane.showMessageDialog(SpigotGUI.this, "There are no servers running.");
 					}
 				}
-
 			}
 		});
 
-		exitTimer = new JComboBox<String>();
-		exitTimer.setModel(new DefaultComboBoxModel<String>(new String[] {"No Exit Timer", "1 Minute"}));
+		lblServerStatusText = new JLabel("Status: Offline");
+		lblServerStatusText.setHorizontalAlignment(SwingConstants.RIGHT);
+		lblServerStatusText.setMinimumSize(new Dimension(130, 20));
+		lblServerStatusText.setPreferredSize(new Dimension(130, 20));
 
-		lblStatus = new JLabel("Status: Offline");
-		
-		chckbxConsoleForsay = new JCheckBox("Console for /say");
-		chckbxConsoleForsay.setToolTipText("When checked, your console input is sent as \"say <text>\", so it appears as a server message in game chat. When unchecked, input is sent as a raw command.");
+		chkConsoleScrollSticky = new JCheckBox("Console scroll sticky");
+		chkConsoleScrollSticky.setSelected(consoleStickToBottom);
+		chkConsoleScrollSticky.setToolTipText("When checked, the console will auto-scroll to the bottom when new lines arrive. When unchecked, it stays at the current position.");
+		manualConsoleScrollStickyMode = settings.isManualConsoleScrollSticky();
+		chkConsoleScrollSticky.setVisible(manualConsoleScrollStickyMode);
+		chkConsoleScrollSticky.setEnabled(manualConsoleScrollStickyMode);
+		chkConsoleScrollSticky.addActionListener(e -> {
+			if (manualConsoleScrollStickyMode) {
+				consoleStickToBottom = chkConsoleScrollSticky.isSelected();
+				updateScrollStickyDebugCheckbox();
+			}
+		});
+
+		chkConsoleInputAsSay = new JCheckBox("Console for /say");
+		chkConsoleInputAsSay.setToolTipText("When checked, your console input is sent as \"say <text>\", so it appears as a server message in game chat. When unchecked, input is sent as a raw command.");
+
+		// Top bar: server controls (left), server IP (center), status (right), visible in all tabs
+		JPanel topBar = new JPanel(new BorderLayout(0, 0));
+		JPanel topBarLeft = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
+		topBarLeft.add(btnStartServer);
+		topBarLeft.add(btnStopServer);
+		topBarLeft.add(btnRestartServer);
+		topBarLeft.add(Box.createHorizontalStrut(6));
+		topBarLeft.add(lblServerIP);
+		JPanel topBarRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 2));
+		topBarRight.add(lblServerStatusText);
+		serverStatusCircle.setPreferredSize(new Dimension(26, 26));
+		topBarRight.add(serverStatusCircle);
+		applyServerButtonStyle(!settings.isServerButtonsUseText());
+		topBar.add(topBarLeft, BorderLayout.WEST);
+		topBar.add(topBarRight, BorderLayout.EAST);
+		contentPane.add(topBar, BorderLayout.NORTH);
+		tabbedPane.setBorder(new EmptyBorder(8, 0, 0, 0));
+		contentPane.add(tabbedPane, BorderLayout.CENTER);
+
 		GroupLayout gl_panel = new GroupLayout(panel);
 		gl_panel.setHorizontalGroup(
 			gl_panel.createParallelGroup(Alignment.LEADING)
-				.addGroup(gl_panel.createSequentialGroup()
-					.addContainerGap()
-					.addGroup(gl_panel.createParallelGroup(Alignment.LEADING, false)
-						.addGroup(gl_panel.createSequentialGroup()
-							.addComponent(chckbxConsoleForsay)
-							.addPreferredGap(ComponentPlacement.RELATED)
-							.addComponent(lblStatus, GroupLayout.DEFAULT_SIZE, GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-						.addGroup(gl_panel.createSequentialGroup()
-							.addComponent(btnStartServer, GroupLayout.PREFERRED_SIZE, 119, GroupLayout.PREFERRED_SIZE)
-							.addGap(11)
-							.addComponent(btnStopServer, GroupLayout.PREFERRED_SIZE, 119, GroupLayout.PREFERRED_SIZE)
-							.addPreferredGap(ComponentPlacement.UNRELATED)
-							.addComponent(btnRestartServer, GroupLayout.PREFERRED_SIZE, 119, GroupLayout.PREFERRED_SIZE)
-							.addPreferredGap(ComponentPlacement.RELATED)
-							.addComponent(exitTimer, GroupLayout.PREFERRED_SIZE, 121, GroupLayout.PREFERRED_SIZE)))
-					.addPreferredGap(ComponentPlacement.RELATED, 69, Short.MAX_VALUE)
-					.addComponent(status, GroupLayout.PREFERRED_SIZE, 64, GroupLayout.PREFERRED_SIZE))
-				.addGroup(gl_panel.createSequentialGroup()
-					.addComponent(lblNewLabel, GroupLayout.PREFERRED_SIZE, 153, GroupLayout.PREFERRED_SIZE)
-					.addContainerGap())
 				.addComponent(scrollPane, GroupLayout.DEFAULT_SIZE, 650, Short.MAX_VALUE)
 				.addGroup(gl_panel.createSequentialGroup()
 					.addGap(10)
-					.addComponent(inputTxt, GroupLayout.DEFAULT_SIZE, 640, Short.MAX_VALUE))
+					.addComponent(consoleCommandInput, GroupLayout.DEFAULT_SIZE, 640, Short.MAX_VALUE)
+					.addGap(10))
+				.addGroup(gl_panel.createSequentialGroup()
+					.addContainerGap()
+					.addComponent(chkConsoleInputAsSay)
+					.addPreferredGap(ComponentPlacement.RELATED)
+					.addComponent(chkConsoleScrollSticky)
+					.addContainerGap(GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
 		);
 		gl_panel.setVerticalGroup(
 			gl_panel.createParallelGroup(Alignment.LEADING)
 				.addGroup(gl_panel.createSequentialGroup()
-					.addComponent(lblNewLabel, GroupLayout.PREFERRED_SIZE, 16, GroupLayout.PREFERRED_SIZE)
-					.addPreferredGap(ComponentPlacement.RELATED)
 					.addComponent(scrollPane, GroupLayout.DEFAULT_SIZE, 383, Short.MAX_VALUE)
 					.addPreferredGap(ComponentPlacement.RELATED)
-					.addComponent(inputTxt, GroupLayout.PREFERRED_SIZE, 26, GroupLayout.PREFERRED_SIZE)
+					.addComponent(consoleCommandInput, GroupLayout.PREFERRED_SIZE, 26, GroupLayout.PREFERRED_SIZE)
 					.addPreferredGap(ComponentPlacement.RELATED)
-					.addGroup(gl_panel.createParallelGroup(Alignment.TRAILING)
-						.addGroup(gl_panel.createSequentialGroup()
-							.addGroup(gl_panel.createParallelGroup(Alignment.BASELINE)
-								.addComponent(btnStartServer)
-								.addComponent(btnStopServer)
-								.addComponent(btnRestartServer)
-								.addComponent(exitTimer))
-							.addGap(56))
-						.addGroup(gl_panel.createSequentialGroup()
-							.addGroup(gl_panel.createParallelGroup(Alignment.BASELINE)
-								.addComponent(chckbxConsoleForsay)
-								.addComponent(lblStatus))
-							.addGap(3))
-						.addComponent(status, GroupLayout.PREFERRED_SIZE, 64, GroupLayout.PREFERRED_SIZE)))
+					.addGroup(gl_panel.createParallelGroup(Alignment.BASELINE)
+						.addComponent(chkConsoleInputAsSay)
+						.addComponent(chkConsoleScrollSticky))
+					.addGap(3))
 		);
 		panel.setLayout(gl_panel);
 
@@ -551,1020 +532,19 @@ public class SpigotGUI extends JFrame {
 
 		JScrollPane scrollPane_1 = new JScrollPane();
 
-		table = new JTable();
+		playersTable = new JTable();
 
-		table.setModel(new DefaultTableModel(
-				new Object[][] {
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-					{null, null},
-				},
-				new String[] {
-						"Username", "Running IP"
-				}
+		playersTable.setModel(new DefaultTableModel(
+				new String[] { "Username", "Running IP" },
+				0
 				));
-		scrollPane_1.setViewportView(table);
+		lblPlayersOnlineCount = new JLabel("Players online: 0");
+		scrollPane_1.setViewportView(playersTable);
 
 		setActive(false);
+		updateServerButtonStates(false);
 
-		setTableAsList(table, players);
+		setTableAsList(playersTable, players);
 
 		JMenuItem mntmPlayerName = new JMenuItem("Player Name");
 
@@ -1573,15 +553,15 @@ public class SpigotGUI extends JFrame {
 			public void popupMenuCanceled(PopupMenuEvent arg0) {}
 			public void popupMenuWillBecomeInvisible(PopupMenuEvent arg0) {}
 			public void popupMenuWillBecomeVisible(PopupMenuEvent arg0) {
-				int row = table.getSelectedRow();
+				int row = playersTable.getSelectedRow();
 				if (row < 0) return;
-				Object val = table.getModel().getValueAt(row, 0);
+				Object val = playersTable.getModel().getValueAt(row, 0);
 				String player = (val == null) ? "" : val.toString().trim();
 				mntmPlayerName.setText(player.isEmpty() ? "(no player)" : player);
 			}
 		});
 		// Only show context menu when right-clicking on a row that has a player name (not empty/null)
-		table.addMouseListener(new MouseAdapter() {
+		playersTable.addMouseListener(new MouseAdapter() {
 			@Override
 			public void mousePressed(MouseEvent e) {
 				if (e.isPopupTrigger()) showPlayersPopupIfRowValid(e);
@@ -1591,13 +571,13 @@ public class SpigotGUI extends JFrame {
 				if (e.isPopupTrigger()) showPlayersPopupIfRowValid(e);
 			}
 			private void showPlayersPopupIfRowValid(MouseEvent e) {
-				int row = table.rowAtPoint(e.getPoint());
+				int row = playersTable.rowAtPoint(e.getPoint());
 				if (row < 0) return;
-				Object val = table.getModel().getValueAt(row, 0);
+				Object val = playersTable.getModel().getValueAt(row, 0);
 				String player = (val == null) ? "" : val.toString().trim();
-				if (player.isEmpty()) return;
-				table.setRowSelectionInterval(row, row);
-				popupMenu.show(table, e.getX(), e.getY());
+				if (player.isEmpty() || "(No players online)".equals(player)) return;
+				playersTable.setRowSelectionInterval(row, row);
+				popupMenu.show(playersTable, e.getX(), e.getY());
 			}
 		});
 
@@ -1606,22 +586,18 @@ public class SpigotGUI extends JFrame {
 			public void actionPerformed(ActionEvent arg0) {
 
 				if (server != null) {
-
 					if (!server.isRunning()) {
-						JOptionPane.showMessageDialog(null, "There is no server running");
+						JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
 						return;
 					}
-
-				}else {
-					JOptionPane.showMessageDialog(null, "There is no server running");
+				} else {
+					JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
 					return;
 				}
-
-				String player = table.getModel().getValueAt(table.getSelectedRow(), 0) + "";
+				String player = playersTable.getModel().getValueAt(playersTable.getSelectedRow(), 0) + "";
 				try {
 					module.sendCommand("op " + player);
 				} catch (ProcessException e) {
-					// TODO Auto-generated catch block
 					e.printStackTrace();
 				}
 			}
@@ -1638,25 +614,20 @@ public class SpigotGUI extends JFrame {
 			public void actionPerformed(ActionEvent e) {
 
 				if (server != null) {
-
 					if (!server.isRunning()) {
-						JOptionPane.showMessageDialog(null, "There is no server running");
+						JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
 						return;
 					}
-
-				}else {
-					JOptionPane.showMessageDialog(null, "There is no server running");
+				} else {
+					JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
 					return;
 				}
-
-				String player = table.getModel().getValueAt(table.getSelectedRow(), 0) + "";
+				String player = playersTable.getModel().getValueAt(playersTable.getSelectedRow(), 0) + "";
 				try {
 					module.sendCommand("deop " + player);
 				} catch (ProcessException ex) {
-					// TODO Auto-generated catch block
 					ex.printStackTrace();
 				}
-
 			}
 		});
 		popupMenu.add(mntmDeop);
@@ -1666,27 +637,23 @@ public class SpigotGUI extends JFrame {
 			public void actionPerformed(ActionEvent e) {
 
 				if (server != null) {
-
 					if (!server.isRunning()) {
-						JOptionPane.showMessageDialog(null, "There is no server running");
+						JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
 						return;
 					}
-
-				}else {
-					JOptionPane.showMessageDialog(null, "There is no server running");
+				} else {
+					JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
 					return;
 				}
-
-				String player = table.getModel().getValueAt(table.getSelectedRow(), 0) + "";
+				String player = playersTable.getModel().getValueAt(playersTable.getSelectedRow(), 0) + "";
 				try {
-					if (JOptionPane.showConfirmDialog(null, "Are you sure you want to kick " + player, "Kick", JOptionPane.YES_NO_OPTION)==JOptionPane.YES_OPTION) {
-						module.sendCommand("kick " + player + " " + JOptionPane.showInputDialog(null, "Reason?"));
+					if (JOptionPane.showConfirmDialog(SpigotGUI.this, "Are you sure you want to kick " + player + "?", "Kick", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
+						String reason = JOptionPane.showInputDialog(SpigotGUI.this, "Reason?");
+						module.sendCommand("kick " + player + (reason != null ? " " + reason : ""));
 					}
 				} catch (ProcessException ex) {
-					// TODO Auto-generated catch block
 					ex.printStackTrace();
 				}
-
 			}
 		});
 		popupMenu.add(mntmKick);
@@ -1696,29 +663,23 @@ public class SpigotGUI extends JFrame {
 			public void actionPerformed(ActionEvent e) {
 
 				if (server != null) {
-
 					if (!server.isRunning()) {
-						JOptionPane.showMessageDialog(null, "There is no server running");
+						JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
 						return;
 					}
-
-				}else {
-					JOptionPane.showMessageDialog(null, "There is no server running");
+				} else {
+					JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
 					return;
 				}
-
-				String player = table.getModel().getValueAt(table.getSelectedRow(), 0) + "";
+				String player = playersTable.getModel().getValueAt(playersTable.getSelectedRow(), 0) + "";
 				try {
-
-					if (JOptionPane.showConfirmDialog(null, "Are you sure you want to ban " + player, "Ban", JOptionPane.YES_NO_OPTION)==JOptionPane.YES_OPTION) {
-						module.sendCommand("ban " + player + " " + JOptionPane.showInputDialog(null, "Reason?"));
+					if (JOptionPane.showConfirmDialog(SpigotGUI.this, "Are you sure you want to ban " + player + "?", "Ban", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
+						String reason = JOptionPane.showInputDialog(SpigotGUI.this, "Reason?");
+						module.sendCommand("ban " + player + (reason != null ? " " + reason : ""));
 					}
-
 				} catch (ProcessException ex) {
-					// TODO Auto-generated catch block
 					ex.printStackTrace();
 				}
-
 			}
 		});
 		popupMenu.add(mntmBan);
@@ -1726,15 +687,14 @@ public class SpigotGUI extends JFrame {
 		JButton btnPardon = new JButton("Pardon a Player");
 		btnPardon.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				String player = JOptionPane.showInputDialog(null, "Player Name");
+				String player = JOptionPane.showInputDialog(SpigotGUI.this, "Player Name");
+				if (player == null || player.trim().isEmpty()) return;
+				player = player.trim();
 				try {
-
-					if (JOptionPane.showConfirmDialog(null, "Are you sure you want to pardon " + player, "Pardon", JOptionPane.YES_NO_OPTION)==JOptionPane.YES_OPTION) {
+					if (JOptionPane.showConfirmDialog(SpigotGUI.this, "Are you sure you want to pardon " + player + "?", "Pardon", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
 						module.sendCommand("pardon " + player);
 					}
-
 				} catch (ProcessException ex) {
-					// TODO Auto-generated catch block
 					ex.printStackTrace();
 				}
 			}
@@ -1747,25 +707,22 @@ public class SpigotGUI extends JFrame {
 				if (server != null) {
 
 					if (!server.isRunning()) {
-						JOptionPane.showMessageDialog(null, "There is no server running");
+						JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
 						return;
 					}
-
-				}else {
-					JOptionPane.showMessageDialog(null, "There is no server running");
+				} else {
+					JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
 					return;
 				}
-
-				String player = table.getModel().getValueAt(table.getSelectedRow(), 0) + "";
+				String player = playersTable.getModel().getValueAt(playersTable.getSelectedRow(), 0) + "";
 				try {
-					if (JOptionPane.showConfirmDialog(null, "Are you sure you want to kick " + player, "Kick", JOptionPane.YES_NO_OPTION)==JOptionPane.YES_OPTION) {
-						module.sendCommand("kick " + player + " " + JOptionPane.showInputDialog(null, "Reason?"));
+					if (JOptionPane.showConfirmDialog(SpigotGUI.this, "Are you sure you want to kick " + player + "?", "Kick", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
+						String reason = JOptionPane.showInputDialog(SpigotGUI.this, "Reason?");
+						module.sendCommand("kick " + player + (reason != null ? " " + reason : ""));
 					}
 				} catch (ProcessException ex) {
-					// TODO Auto-generated catch block
 					ex.printStackTrace();
 				}
-
 			}
 		});
 
@@ -1776,27 +733,22 @@ public class SpigotGUI extends JFrame {
 				if (server != null) {
 
 					if (!server.isRunning()) {
-						JOptionPane.showMessageDialog(null, "There is no server running");
+						JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
 						return;
 					}
-
-				}else {
-					JOptionPane.showMessageDialog(null, "There is no server running");
+				} else {
+					JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
 					return;
 				}
-
-				String player = table.getModel().getValueAt(table.getSelectedRow(), 0) + "";
+				String player = playersTable.getModel().getValueAt(playersTable.getSelectedRow(), 0) + "";
 				try {
-
-					if (JOptionPane.showConfirmDialog(null, "Are you sure you want to ban " + player, "Ban", JOptionPane.YES_NO_OPTION)==JOptionPane.YES_OPTION) {
-						module.sendCommand("ban " + player + " " + JOptionPane.showInputDialog(null, "Reason?"));
+					if (JOptionPane.showConfirmDialog(SpigotGUI.this, "Are you sure you want to ban " + player + "?", "Ban", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
+						String reason = JOptionPane.showInputDialog(SpigotGUI.this, "Reason?");
+						module.sendCommand("ban " + player + (reason != null ? " " + reason : ""));
 					}
-
 				} catch (ProcessException ex) {
-					// TODO Auto-generated catch block
 					ex.printStackTrace();
 				}
-
 			}
 		});
 
@@ -1807,23 +759,19 @@ public class SpigotGUI extends JFrame {
 				if (server != null) {
 
 					if (!server.isRunning()) {
-						JOptionPane.showMessageDialog(null, "There is no server running");
+						JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
 						return;
 					}
-
-				}else {
-					JOptionPane.showMessageDialog(null, "There is no server running");
+				} else {
+					JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
 					return;
 				}
-
-				String player = table.getModel().getValueAt(table.getSelectedRow(), 0) + "";
+				String player = playersTable.getModel().getValueAt(playersTable.getSelectedRow(), 0) + "";
 				try {
 					module.sendCommand("op " + player);
 				} catch (ProcessException e) {
-					// TODO Auto-generated catch block
 					e.printStackTrace();
 				}
-
 			}
 		});
 
@@ -1831,22 +779,18 @@ public class SpigotGUI extends JFrame {
 		btnDeop.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				if (server != null) {
-
 					if (!server.isRunning()) {
-						JOptionPane.showMessageDialog(null, "There is no server running");
+						JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
 						return;
 					}
-
-				}else {
-					JOptionPane.showMessageDialog(null, "There is no server running");
+				} else {
+					JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
 					return;
 				}
-
-				String player = table.getModel().getValueAt(table.getSelectedRow(), 0) + "";
+				String player = playersTable.getModel().getValueAt(playersTable.getSelectedRow(), 0) + "";
 				try {
 					module.sendCommand("deop " + player);
 				} catch (ProcessException ex) {
-					// TODO Auto-generated catch block
 					ex.printStackTrace();
 				}
 			}
@@ -1855,19 +799,20 @@ public class SpigotGUI extends JFrame {
 		gl_panel_1.setHorizontalGroup(
 				gl_panel_1.createParallelGroup(Alignment.LEADING)
 				.addGroup(gl_panel_1.createSequentialGroup()
+						.addGap(12)
 						.addGroup(gl_panel_1.createParallelGroup(Alignment.LEADING)
 								.addGroup(gl_panel_1.createSequentialGroup()
-										.addComponent(btnPardon, GroupLayout.PREFERRED_SIZE, 142, GroupLayout.PREFERRED_SIZE)
-										.addPreferredGap(ComponentPlacement.RELATED)
 										.addComponent(btnKick)
 										.addPreferredGap(ComponentPlacement.RELATED)
 										.addComponent(btnBan)
 										.addPreferredGap(ComponentPlacement.RELATED)
 										.addComponent(btnOp)
 										.addPreferredGap(ComponentPlacement.RELATED)
-										.addComponent(btnDeop))
-								.addGroup(gl_panel_1.createSequentialGroup()
-										.addGap(12)
+										.addComponent(btnDeop)
+										.addPreferredGap(ComponentPlacement.RELATED, 0, Short.MAX_VALUE)
+										.addComponent(btnPardon, GroupLayout.PREFERRED_SIZE, 142, GroupLayout.PREFERRED_SIZE))
+								.addGroup(gl_panel_1.createParallelGroup(Alignment.LEADING)
+										.addComponent(lblPlayersOnlineCount)
 										.addComponent(scrollPane_1, GroupLayout.DEFAULT_SIZE, 626, Short.MAX_VALUE)))
 						.addContainerGap())
 				);
@@ -1875,14 +820,19 @@ public class SpigotGUI extends JFrame {
 				gl_panel_1.createParallelGroup(Alignment.TRAILING)
 				.addGroup(gl_panel_1.createSequentialGroup()
 						.addContainerGap()
+						.addComponent(lblPlayersOnlineCount)
+						.addPreferredGap(ComponentPlacement.RELATED)
 						.addComponent(scrollPane_1, GroupLayout.DEFAULT_SIZE, 430, Short.MAX_VALUE)
-						.addGap(18)
+						.addPreferredGap(ComponentPlacement.RELATED)
 						.addGroup(gl_panel_1.createParallelGroup(Alignment.BASELINE)
-								.addComponent(btnPardon)
 								.addComponent(btnKick)
 								.addComponent(btnBan)
 								.addComponent(btnOp)
-								.addComponent(btnDeop)))
+								.addComponent(btnDeop)
+								.addComponent(btnPardon))
+						.addPreferredGap(ComponentPlacement.RELATED)
+						.addGap(6)
+						.addContainerGap())
 				);
 		panel_1.setLayout(gl_panel_1);
 
@@ -1895,18 +845,18 @@ public class SpigotGUI extends JFrame {
 		maxRam = new JSpinner();
 		maxRam.setModel(new SpinnerNumberModel(Integer.valueOf(1024), null, null, Integer.valueOf(1)));
 		
-		JLabel lblMinRam = new JLabel("Min Ram");
+		JLabel lblMinRam = new JLabel("Min RAM");
 		lblMinRam.setHorizontalAlignment(SwingConstants.LEFT);
 
-		JLabel lblMaxRam = new JLabel("Max Ram");
+		JLabel lblMaxRam = new JLabel("Max RAM");
 		lblMaxRam.setHorizontalAlignment(SwingConstants.LEFT);
 
-		customArgsTxt = new JTextField();
+		customJvmArgsField = new JTextField();
 		
-		customArgsTxt.setColumns(10);
+		customJvmArgsField.setColumns(10);
 
-		customSwitchesTxt = new JTextField();
-		customSwitchesTxt.setColumns(10);
+		customJvmSwitchesField = new JTextField();
+		customJvmSwitchesField.setColumns(10);
 		
 		fontSpinner = new JSpinner();
 		fontSpinner.addChangeListener(new ChangeListener() {
@@ -1924,33 +874,30 @@ public class SpigotGUI extends JFrame {
 		minRam.setValue(serverSettings.getMinRam());
 		maxRam.setValue(serverSettings.getMaxRam());
 		fontSpinner.setValue(settings.getFontSize());
-		customArgsTxt.setText(serverSettings.getCustomArgs());
-		customSwitchesTxt.setText(serverSettings.getCustomSwitches());
+		customJvmArgsField.setText(serverSettings.getCustomArgs());
+		customJvmSwitchesField.setText(serverSettings.getCustomSwitches());
 		
 		JLabel lblCustomArgs = new JLabel("Custom Arguments");
 		JLabel lblCustomSwitches = new JLabel("Custom Switches");
 		
-		JLabel lblJarFile = new JLabel("Server File: server.jar");
-		lblJarFile.setHorizontalAlignment(SwingConstants.LEFT);
+		JTextField serverFileField = new JTextField(30);
+		serverFileField.setEditable(false);
+		serverFileField.setToolTipText("Path to the server JAR file. Use \"Set Server File\" to change.");
+		serverFileField.setText(jarFile != null ? jarFile.getAbsolutePath() : new File("server.jar").getAbsolutePath());
 
 		JButton btnSetJarFile = new JButton("Set Server File");
+		btnSetJarFile.setToolTipText("Choose the server JAR file to run (e.g. paper.jar, spigot.jar).");
 		btnSetJarFile.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				File jarDir = getDefaultDirectory();
 				JFileChooser fileChooser = new JFileChooser();
-
 				fileChooser.setCurrentDirectory(jarDir);
-				FileNameExtensionFilter filter = new FileNameExtensionFilter("Jar file (*.jar)", "jar");
-
-				fileChooser.setFileFilter(filter);
-
-				int result = fileChooser.showOpenDialog(SpigotGUI.this);
-
-				if (result==JFileChooser.APPROVE_OPTION) {
+				fileChooser.setFileFilter(new FileNameExtensionFilter("Jar file (*.jar)", "jar"));
+				if (jarFile != null && jarFile.getParentFile() != null) fileChooser.setSelectedFile(jarFile);
+				if (fileChooser.showOpenDialog(SpigotGUI.this) == JFileChooser.APPROVE_OPTION) {
 					jarFile = fileChooser.getSelectedFile();
-					lblJarFile.setText("Server File: " + jarFile.getAbsolutePath());
+					serverFileField.setText(jarFile.getAbsolutePath());
 				}
-
 			}
 		});
 		
@@ -1981,6 +928,7 @@ public class SpigotGUI extends JFrame {
 		});
 
 		consoleDarkModeCheckBox = new JCheckBox("Console dark mode");
+		consoleDarkModeCheckBox.setToolTipText("Use a dark background in the console tab. When unchecked, the console uses a light background.");
 		consoleDarkModeCheckBox.setSelected(settings.isConsoleDarkMode());
 		consoleDarkModeCheckBox.addActionListener(new ActionListener() {
 			@Override
@@ -1992,6 +940,7 @@ public class SpigotGUI extends JFrame {
 		});
 
 		disableConsoleColorsCheckBox = new JCheckBox("Disable console colors");
+		disableConsoleColorsCheckBox.setToolTipText("When checked, console text is shown in the default color only (no ANSI or § colors).");
 		disableConsoleColorsCheckBox.setSelected(!settings.isConsoleColorsEnabled());
 		disableConsoleColorsCheckBox.addActionListener(new ActionListener() {
 			@Override
@@ -2003,6 +952,7 @@ public class SpigotGUI extends JFrame {
 		});
 
 		openFilesInSystemDefaultCheckBox = new JCheckBox("Open files in system default application");
+		openFilesInSystemDefaultCheckBox.setToolTipText("When checked, double-clicking a file in the Files tab opens it in your system's default application instead of the built-in editor.");
 		openFilesInSystemDefaultCheckBox.setSelected(settings.isOpenFilesInSystemDefault());
 		openFilesInSystemDefaultCheckBox.addActionListener(new ActionListener() {
 			@Override
@@ -2014,16 +964,26 @@ public class SpigotGUI extends JFrame {
 		});
 
 		JButton btnEditServerproperties = new JButton("Edit Server.Properties");
+		btnEditServerproperties.setToolTipText("Edit the server.properties file.");
 		btnEditServerproperties.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent arg0) {
-				FileEditor fileEditor = new FileEditor();
-				fileEditor.setLocationRelativeTo(SpigotGUI.this);
-				try {
-					fileEditor.openFile(new File("server.properties"));
-				} catch (IOException e) {
-					e.printStackTrace();
+				File serverProps = new File("server.properties");
+				if (openFilesInSystemDefaultCheckBox != null && openFilesInSystemDefaultCheckBox.isSelected()) {
+					try {
+						Desktop.getDesktop().open(serverProps);
+					} catch (IOException e) {
+						JOptionPane.showMessageDialog(SpigotGUI.this, "Could not open: " + e.getMessage());
+					}
+				} else {
+					FileEditor fileEditor = new FileEditor();
+					fileEditor.setLocationRelativeTo(SpigotGUI.this);
+					try {
+						fileEditor.openFile(serverProps);
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+					fileEditor.setVisible(true);
 				}
-				fileEditor.setVisible(true);
 			}
 		});
 		
@@ -2033,38 +993,112 @@ public class SpigotGUI extends JFrame {
 		settingsContentInner.setLayout(new BoxLayout(settingsContentInner, BoxLayout.Y_AXIS));
 		settingsContentInner.setBorder(new EmptyBorder(10, 10, 10, 10));
 
-		// Section: Server (path + two buttons same width, left-aligned)
+		// Section: Server — each row has its own layout (columns do not align across rows)
 		JPanel serverSection = new JPanel();
 		serverSection.setBorder(new TitledBorder(null, "Server", TitledBorder.LEADING, TitledBorder.TOP));
 		serverSection.setLayout(new GridBagLayout());
-		GridBagConstraints c = new GridBagConstraints();
-		c.insets = new Insets(pad, pad, pad, pad);
-		c.anchor = GridBagConstraints.WEST;
-		c.fill = GridBagConstraints.NONE;
-		c.gridx = 0; c.gridy = 0; c.weightx = 1; serverSection.add(lblJarFile, c);
-		btnEditServerproperties.setPreferredSize(new Dimension(220, btnEditServerproperties.getPreferredSize().height));
-		c.gridy = 1; c.weightx = 0; serverSection.add(btnSetJarFile, c);
-		c.gridx = 1; serverSection.add(btnEditServerproperties, c);
+		GridBagConstraints rc = new GridBagConstraints();
+		rc.fill = GridBagConstraints.HORIZONTAL;
+		rc.weightx = 1;
+		rc.gridwidth = 1;
+		rc.anchor = GridBagConstraints.WEST;
+		rc.insets = new Insets(pad, pad, pad, pad);
+		int serverBtnW = 120;
+		btnSetJarFile.setPreferredSize(new Dimension(serverBtnW, btnSetJarFile.getPreferredSize().height));
+		// Row 1: flexible text field + fixed Set Server File button
+		JPanel row1 = new JPanel(new BorderLayout(8, 0));
+		row1.add(serverFileField, BorderLayout.CENTER);
+		row1.add(btnSetJarFile, BorderLayout.EAST);
+		rc.gridx = 0; rc.gridy = 0; serverSection.add(row1, rc);
+		JLabel lblShutdownCountdown = new JLabel("Shutdown/restart countdown (seconds)");
+		lblShutdownCountdown.setToolTipText("When you click Stop or Restart, wait this many seconds before actually stopping (announces in chat). 0 = immediate.");
+		shutdownCountdownSpinner = new JSpinner(new SpinnerNumberModel(Math.max(0, settings.getShutdownCountdownSeconds()), 0, 86400, 1));
+		shutdownCountdownSpinner.setToolTipText(lblShutdownCountdown.getToolTipText());
+		shutdownCountdownSpinner.setPreferredSize(new Dimension(90, shutdownCountdownSpinner.getPreferredSize().height));
+		// Rows 2 & 3: same 3-column layout so Edit button matches first column width of countdown row
+		JPanel countdownEditPanel = new JPanel(new GridBagLayout());
+		GridBagConstraints ce = new GridBagConstraints();
+		ce.insets = new Insets(0, 0, 0, 0);
+		ce.anchor = GridBagConstraints.WEST;
+		ce.fill = GridBagConstraints.NONE;
+		ce.gridx = 0; ce.gridy = 0; ce.weightx = 0; countdownEditPanel.add(lblShutdownCountdown, ce);
+		ce.insets = new Insets(0, 8, 0, 0);
+		ce.gridx = 1; ce.weightx = 0; countdownEditPanel.add(shutdownCountdownSpinner, ce);
+		ce.insets = new Insets(0, 0, 0, 0);
+		ce.gridx = 2; ce.weightx = 1; ce.fill = GridBagConstraints.HORIZONTAL; countdownEditPanel.add(new JPanel(), ce);
+		ce.gridy = 1; ce.gridx = 0; ce.weightx = 0; ce.fill = GridBagConstraints.HORIZONTAL; countdownEditPanel.add(btnEditServerproperties, ce);
+		ce.gridx = 1; ce.weightx = 0; ce.fill = GridBagConstraints.NONE; countdownEditPanel.add(new JPanel(), ce);
+		ce.gridx = 2; ce.weightx = 1; ce.fill = GridBagConstraints.HORIZONTAL; countdownEditPanel.add(new JPanel(), ce);
+		rc.gridy = 1; rc.gridheight = 2; serverSection.add(countdownEditPanel, rc);
+		rc.gridheight = 1;
 		settingsContentInner.add(serverSection);
 
-		// Section: JVM / Run options
+		// Section: JVM / Run options — custom args/switches first, then min/max RAM (fixed-width spinners)
 		JPanel jvmSection = new JPanel();
 		jvmSection.setBorder(new TitledBorder(null, "JVM / Run options", TitledBorder.LEADING, TitledBorder.TOP));
 		jvmSection.setLayout(new GridBagLayout());
-		c = new GridBagConstraints();
+		GridBagConstraints c = new GridBagConstraints();
 		c.insets = new Insets(pad, pad, pad, pad);
 		c.anchor = GridBagConstraints.WEST;
+		lblCustomArgs.setToolTipText("<html><b>Custom arguments</b> — Passed to the JVM as program arguments (e.g. <code>-Dproperty=value</code> for system properties).<br>These appear after the class/jar and before any application arguments. Use for JVM tuning and -D flags.</html>");
+		customJvmArgsField.setToolTipText(lblCustomArgs.getToolTipText());
+		lblCustomSwitches.setToolTipText("<html><b>Custom switches</b> — Passed to the java launcher as command-line switches (e.g. <code>-Xmx2G</code>, <code>-XX:+UseG1GC</code>).<br>These appear before the class/jar. Use for memory, GC, and other JVM options. Arguments (above) are for -D and app-level; switches are for launcher options.</html>");
+		customJvmSwitchesField.setToolTipText(lblCustomSwitches.getToolTipText());
+		JScrollPane argsScroll = new JScrollPane(customJvmArgsField);
+		argsScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+		argsScroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_NEVER);
+		argsScroll.setBorder(null);
+		customJvmArgsField.addMouseWheelListener(e -> {
+			Component p = customJvmArgsField.getParent();
+			if (p instanceof JViewport) {
+				JScrollPane sp = (JScrollPane) ((JViewport) p).getParent();
+				javax.swing.JScrollBar bar = sp.getHorizontalScrollBar();
+				if (bar != null && bar.isEnabled()) {
+					int step = e.getUnitsToScroll() * 24;
+					bar.setValue(Math.max(bar.getMinimum(), Math.min(bar.getMaximum() - bar.getVisibleAmount(), bar.getValue() + step)));
+				}
+			}
+		});
+		JScrollPane switchesScroll = new JScrollPane(customJvmSwitchesField);
+		switchesScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+		switchesScroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_NEVER);
+		switchesScroll.setBorder(null);
+		customJvmSwitchesField.addMouseWheelListener(e -> {
+			Component p = customJvmSwitchesField.getParent();
+			if (p instanceof JViewport) {
+				JScrollPane sp = (JScrollPane) ((JViewport) p).getParent();
+				javax.swing.JScrollBar bar = sp.getHorizontalScrollBar();
+				if (bar != null && bar.isEnabled()) {
+					int step = e.getUnitsToScroll() * 24;
+					bar.setValue(Math.max(bar.getMinimum(), Math.min(bar.getMaximum() - bar.getVisibleAmount(), bar.getValue() + step)));
+				}
+			}
+		});
 		c.fill = GridBagConstraints.HORIZONTAL;
-		c.gridx = 0; c.gridy = 0; c.weightx = 0; jvmSection.add(lblMinRam, c);
-		c.gridx = 1; c.weightx = 1; jvmSection.add(minRam, c);
-		c.gridy = 1; c.gridx = 0; c.weightx = 0; jvmSection.add(lblMaxRam, c);
-		c.gridx = 1; c.weightx = 1; jvmSection.add(maxRam, c);
-		c.gridy = 2; c.gridx = 0; c.weightx = 0; jvmSection.add(lblCustomArgs, c);
-		c.gridx = 1; c.weightx = 1; jvmSection.add(customArgsTxt, c);
-		c.gridy = 3; c.gridx = 0; c.weightx = 0; jvmSection.add(lblCustomSwitches, c);
-		c.gridx = 1; c.weightx = 1; jvmSection.add(customSwitchesTxt, c);
-		customArgsTxt.setMinimumSize(new Dimension(60, 20));
-		customSwitchesTxt.setMinimumSize(new Dimension(60, 20));
+		c.gridx = 0; c.gridy = 0; c.weightx = 0; jvmSection.add(lblCustomArgs, c);
+		c.gridx = 1; c.gridwidth = 2; c.weightx = 1; jvmSection.add(argsScroll, c);
+		c.gridwidth = 1;
+		c.gridy = 1; c.gridx = 0; c.weightx = 0; jvmSection.add(lblCustomSwitches, c);
+		c.gridx = 1; c.gridwidth = 2; c.weightx = 1; jvmSection.add(switchesScroll, c);
+		c.gridwidth = 1;
+		int spinnerW = 90;
+		minRam.setPreferredSize(new Dimension(spinnerW, minRam.getPreferredSize().height));
+		maxRam.setPreferredSize(new Dimension(spinnerW, maxRam.getPreferredSize().height));
+		lblMinRam.setToolTipText("Minimum heap size in MB allocated to the server JVM.");
+		minRam.setToolTipText(lblMinRam.getToolTipText());
+		lblMaxRam.setToolTipText("Maximum heap size in MB allocated to the server JVM.");
+		maxRam.setToolTipText(lblMaxRam.getToolTipText());
+		c.fill = GridBagConstraints.NONE;
+		c.gridy = 2; c.gridx = 0; c.weightx = 0; jvmSection.add(lblMinRam, c);
+		c.gridx = 1; c.weightx = 0; jvmSection.add(minRam, c);
+		c.gridx = 2; c.weightx = 1; c.fill = GridBagConstraints.HORIZONTAL; jvmSection.add(new JPanel(), c);
+		c.fill = GridBagConstraints.NONE;
+		c.gridy = 3; c.gridx = 0; c.weightx = 0; jvmSection.add(lblMaxRam, c);
+		c.gridx = 1; c.weightx = 0; jvmSection.add(maxRam, c);
+		c.gridx = 2; c.weightx = 1; c.fill = GridBagConstraints.HORIZONTAL; jvmSection.add(new JPanel(), c);
+		c.gridwidth = 1;
+		customJvmArgsField.setMinimumSize(new Dimension(60, 20));
+		customJvmSwitchesField.setMinimumSize(new Dimension(60, 20));
 		settingsContentInner.add(jvmSection);
 
 		// Section: Files (full width like other sections; checkbox left-aligned)
@@ -2087,19 +1121,45 @@ public class SpigotGUI extends JFrame {
 		c.insets = new Insets(pad, pad, pad, pad);
 		c.anchor = GridBagConstraints.WEST;
 		c.fill = GridBagConstraints.HORIZONTAL;
+		lblTheme.setToolTipText("Look and feel for the application. May require an application restart to take effect.");
+		themeBox.setToolTipText(lblTheme.getToolTipText());
 		c.gridx = 0; c.gridy = 0; c.weightx = 0; c.gridwidth = 1; appearanceSection.add(lblTheme, c);
 		c.gridx = 1; c.weightx = 1; appearanceSection.add(themeBox, c);
 		JLabel lblFileEditorTheme = new JLabel("File editor theme");
+		lblFileEditorTheme.setToolTipText("Syntax highlighting theme used in the built-in file editor.");
 		fileEditorThemeBox = new JComboBox<>(new String[] { "default", "default-alt", "dark", "druid", "eclipse", "idea", "monokai", "vs" });
 		fileEditorThemeBox.setSelectedItem(settings.getFileEditorTheme());
+		fileEditorThemeBox.setToolTipText(lblFileEditorTheme.getToolTipText());
 		fileEditorThemeBox.addActionListener(e -> me.justicepro.spigotgui.FileExplorer.FileEditor.setDefaultThemeName(getFileEditorThemeFromBox()));
 		c.gridy = 1; c.gridx = 0; c.weightx = 0; appearanceSection.add(lblFileEditorTheme, c);
 		c.gridx = 1; c.weightx = 1; appearanceSection.add(fileEditorThemeBox, c);
-		c.gridy = 2; c.gridx = 0; c.weightx = 0; appearanceSection.add(lblFontSize, c);
-		c.gridx = 1; c.weightx = 1; appearanceSection.add(fontSpinner, c);
+		lblFontSize.setToolTipText("Font size (in points) for the console text.");
+		fontSpinner.setPreferredSize(new Dimension(90, fontSpinner.getPreferredSize().height));
+		fontSpinner.setToolTipText(lblFontSize.getToolTipText());
+		c.gridy = 2; c.gridx = 0; c.weightx = 0; c.fill = GridBagConstraints.NONE; appearanceSection.add(lblFontSize, c);
+		c.gridx = 1; c.weightx = 0; c.fill = GridBagConstraints.NONE; appearanceSection.add(fontSpinner, c);
+		c.gridx = 2; c.weightx = 1; c.fill = GridBagConstraints.HORIZONTAL; appearanceSection.add(new JPanel(), c);
+		c.fill = GridBagConstraints.HORIZONTAL;
 		c.gridy = 3; c.gridx = 0; c.gridwidth = 2; appearanceSection.add(consoleDarkModeCheckBox, c);
 		c.gridwidth = 1;
 		c.gridy = 4; c.gridx = 0; c.gridwidth = 2; appearanceSection.add(disableConsoleColorsCheckBox, c);
+		manualConsoleScrollStickyCheckBox = new JCheckBox("Manual console scroll sticky");
+		manualConsoleScrollStickyCheckBox.setToolTipText("<html>When checked, a \"Console scroll sticky\" checkbox appears on the Console tab.<br>You control whether the console auto-scrolls to the bottom by toggling that checkbox.<br>When unchecked, sticky is automatic: scroll to bottom to stick, scroll up to unstick.</html>");
+		manualConsoleScrollStickyCheckBox.setSelected(settings.isManualConsoleScrollSticky());
+		manualConsoleScrollStickyCheckBox.addActionListener(e -> {
+			manualConsoleScrollStickyMode = manualConsoleScrollStickyCheckBox.isSelected();
+			if (chkConsoleScrollSticky != null) {
+				chkConsoleScrollSticky.setVisible(manualConsoleScrollStickyMode);
+				chkConsoleScrollSticky.setEnabled(manualConsoleScrollStickyMode);
+				if (manualConsoleScrollStickyMode) chkConsoleScrollSticky.setSelected(consoleStickToBottom);
+			}
+		});
+		c.gridy = 5; c.gridx = 0; c.gridwidth = 2; appearanceSection.add(manualConsoleScrollStickyCheckBox, c);
+		serverButtonsUseTextCheckBox = new JCheckBox("Use text for server control buttons");
+		serverButtonsUseTextCheckBox.setToolTipText("When checked, Start/Stop/Restart show text. When unchecked, they show only icons (play, stop, refresh) with tooltips.");
+		serverButtonsUseTextCheckBox.setSelected(settings.isServerButtonsUseText());
+		serverButtonsUseTextCheckBox.addActionListener(e -> applyServerButtonStyle(!serverButtonsUseTextCheckBox.isSelected()));
+		c.gridy = 6; c.gridx = 0; c.gridwidth = 2; appearanceSection.add(serverButtonsUseTextCheckBox, c);
 		minRam.setMinimumSize(new Dimension(50, minRam.getPreferredSize().height));
 		maxRam.setMinimumSize(new Dimension(50, maxRam.getPreferredSize().height));
 		fontSpinner.setMinimumSize(new Dimension(50, fontSpinner.getPreferredSize().height));
@@ -2141,6 +1201,11 @@ public class SpigotGUI extends JFrame {
 			@Override
 			public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
 				super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+				// Hover highlight (like Windows Explorer) when not selected
+				if (!isSelected && index == fileListHoverIndex) {
+					java.awt.Color bg = getBackground();
+					setBackground(bg != null ? bg.darker() : java.awt.Color.LIGHT_GRAY);
+				}
 				String s = value == null ? "" : value.toString();
 				Icon dirIcon = UIManager.getIcon("FileView.directoryIcon");
 				Icon fileIcon = UIManager.getIcon("FileView.fileIcon");
@@ -2157,12 +1222,118 @@ public class SpigotGUI extends JFrame {
 				return this;
 			}
 		});
+		java.awt.event.MouseMotionListener motionListener = new java.awt.event.MouseMotionAdapter() {
+			@Override
+			public void mouseMoved(MouseEvent e) {
+				int i = fileList.locationToIndex(e.getPoint());
+				if (i != fileListHoverIndex) {
+					fileListHoverIndex = i;
+					fileList.repaint();
+				}
+			}
+		};
+		fileList.addMouseMotionListener(motionListener);
+		fileList.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseExited(MouseEvent e) {
+				if (fileListHoverIndex != -1) {
+					fileListHoverIndex = -1;
+					fileList.repaint();
+				}
+			}
+		});
 
 		fileList.addMouseListener(fileModel.createMouseListener());
 		fileList.addKeyListener(fileModel.createKeyListener());
 		fileModel.loadDirectory(jarDir);
 
 		scrollPane_2.setViewportView(fileList);
+
+		JPopupMenu filesContextMenu = new JPopupMenu();
+		JMenuItem mnuOpen = new JMenuItem("Open");
+		mnuOpen.addActionListener(e -> fileModel.onFileRun());
+		filesContextMenu.add(mnuOpen);
+		filesContextMenu.addSeparator();
+		JMenuItem mnuCut = new JMenuItem("Cut");
+		mnuCut.addActionListener(e -> { if (fileModel.getSelectedFile() != null) fileModel.setClipboard(fileModel.getSelectedFile(), true); });
+		filesContextMenu.add(mnuCut);
+		JMenuItem mnuCopy = new JMenuItem("Copy");
+		mnuCopy.addActionListener(e -> { if (fileModel.getSelectedFile() != null) fileModel.setClipboard(fileModel.getSelectedFile(), false); });
+		filesContextMenu.add(mnuCopy);
+		JMenuItem mnuPaste = new JMenuItem("Paste");
+		mnuPaste.addActionListener(e -> fileModel.pasteFromClipboard());
+		filesContextMenu.add(mnuPaste);
+		filesContextMenu.addSeparator();
+		JMenuItem mnuDelete = new JMenuItem("Delete");
+		mnuDelete.addActionListener(e -> {
+			File sel = fileModel.getSelectedFile();
+			if (sel != null && JOptionPane.showConfirmDialog(SpigotGUI.this, "Delete \"" + sel.getName() + "\"?", "Confirm Delete", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION)
+				fileModel.deleteSelected();
+		});
+		filesContextMenu.add(mnuDelete);
+		JMenuItem mnuRename = new JMenuItem("Rename");
+		mnuRename.addActionListener(e -> {
+			File sel = fileModel.getSelectedFile();
+			if (sel != null) {
+				String name = JOptionPane.showInputDialog(SpigotGUI.this, "New name:", sel.getName());
+				if (name != null) fileModel.renameSelected(name);
+			}
+		});
+		filesContextMenu.add(mnuRename);
+		filesContextMenu.addPopupMenuListener(new PopupMenuListener() {
+			@Override public void popupMenuCanceled(PopupMenuEvent e) {}
+			@Override public void popupMenuWillBecomeInvisible(PopupMenuEvent e) {}
+			@Override public void popupMenuWillBecomeVisible(PopupMenuEvent e) {
+				boolean hasSel = fileModel.getSelectedFile() != null;
+				mnuOpen.setEnabled(hasSel);
+				mnuCut.setEnabled(hasSel);
+				mnuCopy.setEnabled(hasSel);
+				mnuDelete.setEnabled(hasSel);
+				mnuRename.setEnabled(hasSel);
+				mnuPaste.setEnabled(FileModel.getClipboardFile() != null);
+			}
+		});
+		// Right-click: select row under cursor then show context menu
+		fileList.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mousePressed(MouseEvent e) {
+				if (e.isPopupTrigger()) {
+					int i = fileList.locationToIndex(e.getPoint());
+					if (i >= 0) {
+						fileList.setSelectedIndex(i);
+						fileList.requestFocusInWindow();
+					}
+					filesContextMenu.show(e.getComponent(), e.getX(), e.getY());
+				}
+			}
+			@Override
+			public void mouseReleased(MouseEvent e) {
+				if (e.isPopupTrigger()) {
+					int i = fileList.locationToIndex(e.getPoint());
+					if (i >= 0) {
+						fileList.setSelectedIndex(i);
+						fileList.requestFocusInWindow();
+					}
+					filesContextMenu.show(e.getComponent(), e.getX(), e.getY());
+				}
+			}
+		});
+
+		JButton btnNew = new JButton("New...");
+		JPopupMenu newMenu = new JPopupMenu();
+		JMenuItem mnuNewFile = new JMenuItem("New file");
+		mnuNewFile.addActionListener(e -> {
+			String name = JOptionPane.showInputDialog(SpigotGUI.this, "File name:", "new file.txt");
+			if (name != null) fileModel.createNewFile(name);
+		});
+		newMenu.add(mnuNewFile);
+		JMenuItem mnuNewFolder = new JMenuItem("New folder");
+		mnuNewFolder.addActionListener(e -> {
+			String name = JOptionPane.showInputDialog(SpigotGUI.this, "Folder name:", "new folder");
+			if (name != null) fileModel.createNewFolder(name);
+		});
+		newMenu.add(mnuNewFolder);
+		btnNew.addActionListener(e -> newMenu.show(btnNew, 0, btnNew.getHeight()));
 
 		JButton btnFileEditor = new JButton("File Editor");
 		btnFileEditor.addActionListener(new ActionListener() {
@@ -2177,6 +1348,8 @@ public class SpigotGUI extends JFrame {
 				gl_panel_3.createParallelGroup(Alignment.LEADING)
 				.addComponent(scrollPane_2, GroupLayout.DEFAULT_SIZE, 747, Short.MAX_VALUE)
 				.addGroup(gl_panel_3.createSequentialGroup()
+						.addComponent(btnNew)
+						.addPreferredGap(ComponentPlacement.RELATED, GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
 						.addComponent(btnFileEditor, GroupLayout.PREFERRED_SIZE, 86, GroupLayout.PREFERRED_SIZE)
 						.addContainerGap())
 				);
@@ -2184,7 +1357,9 @@ public class SpigotGUI extends JFrame {
 				gl_panel_3.createParallelGroup(Alignment.LEADING)
 				.addGroup(gl_panel_3.createSequentialGroup()
 						.addGap(6)
-						.addComponent(btnFileEditor)
+						.addGroup(gl_panel_3.createParallelGroup(Alignment.BASELINE)
+								.addComponent(btnNew)
+								.addComponent(btnFileEditor))
 						.addPreferredGap(ComponentPlacement.RELATED)
 						.addComponent(scrollPane_2, GroupLayout.DEFAULT_SIZE, 599, Short.MAX_VALUE))
 				);
@@ -2456,23 +1631,39 @@ public class SpigotGUI extends JFrame {
 		return curDir;
 	}
 
-	public void setTableAsList(JTable table, List<Player> players) {
-
-		for (int i = 0; i < table.getModel().getRowCount(); i++) {
-			table.getModel().setValueAt(null, i, 0);
-			table.getModel().setValueAt(null, i, 1);
+	public void setTableAsList(JTable playersTable, List<Player> players) {
+		DefaultTableModel model = (DefaultTableModel) playersTable.getModel();
+		model.setRowCount(0);
+		for (Player p : players) {
+			model.addRow(new Object[] { p.username, p.lastIP });
 		}
-
-		for (int i = 0; i < players.size(); i++) {
-			Player player = players.get(i);
-
-			table.getModel().setValueAt(player.username, i, 0);
-			table.getModel().setValueAt(player.lastIP, i, 1);
-			/*table.getModel().setValueAt(player.whitelisted, i, 2);
-			table.getModel().setValueAt(player.opped, i, 3);*/
-
+		if (players.isEmpty()) {
+			model.addRow(new Object[] { "(No players online)", "" });
 		}
+		updatePlayersOnlineCountLabel(players.size());
+	}
 
+	private void updatePlayersOnlineCountLabel(int count) {
+		if (lblPlayersOnlineCount == null) return;
+		String maxStr = getServerMaxPlayers();
+		lblPlayersOnlineCount.setText(maxStr != null
+				? "Players online: " + count + " / " + maxStr
+				: "Players online: " + count);
+	}
+
+	/** Reads max-players from server.properties if present; returns null if not found or not started. */
+	private String getServerMaxPlayers() {
+		try {
+			File f = new File("server.properties");
+			if (!f.canRead()) return null;
+			for (String line : Files.readAllLines(f.toPath())) {
+				line = line.trim();
+				if (line.startsWith("max-players=") && !line.startsWith("#")) {
+					return line.substring("max-players=".length()).trim();
+				}
+			}
+		} catch (Exception ignored) { }
+		return null;
 	}
 
 	public static void updatePlayerData(Player player) {
@@ -2493,7 +1684,7 @@ public class SpigotGUI extends JFrame {
 			players.add(player);
 		}
 
-		instance.setTableAsList(instance.table, players);
+		instance.setTableAsList(instance.playersTable, players);
 	}
 
 	public static void removePlayerData(String player) {
@@ -2507,14 +1698,14 @@ public class SpigotGUI extends JFrame {
 					break;
 				}
 			}
-			instance.setTableAsList(instance.table, players);
+			instance.setTableAsList(instance.playersTable, players);
 		} catch (Exception e) {
 			Dialogs.showError("An error occurred while updating player data.");
 		}
 	}
 
 	public void startServer() throws IOException {
-		startServer("nogui " + customArgsTxt.getText(), Server.makeMemory(minRam.getValue() + "M", maxRam.getValue() + "M") + " " + customSwitchesTxt.getText());
+		startServer("nogui " + customJvmArgsField.getText(), Server.makeMemory(minRam.getValue() + "M", maxRam.getValue() + "M") + " " + customJvmSwitchesField.getText());
 
 	}
 
@@ -2590,13 +1781,179 @@ public class SpigotGUI extends JFrame {
 	public void setActive(boolean active) throws IOException {
 
 		if (active==true) {
-			status.setIcon(imgactive);
-			lblStatus.setText("Status: Online");
+			serverStatusCircle.setOnline(true);
+			lblServerStatusText.setText("Status: Online");
 		}else {
-			status.setIcon(imgnotactive);
-			lblStatus.setText("Status: Offline");
+			serverStatusCircle.setOnline(false);
+			lblServerStatusText.setText("Status: Offline");
 		}
+		updateServerButtonStates(active);
+	}
 
+	/** Enable/disable Start, Stop, Restart based on whether the server is running. */
+	private void updateServerButtonStates(boolean serverRunning) {
+		Color enabledFg = UIManager.getColor("Button.foreground");
+		if (enabledFg == null) enabledFg = Color.BLACK;
+		Color disabledFg = UIManager.getColor("Button.disabledText");
+		if (disabledFg == null) disabledFg = Color.GRAY;
+		for (JButton btn : new JButton[] { btnStartServer, btnStopServer, btnRestartServer }) {
+			if (btn == null) continue;
+			boolean enable = (btn == btnStartServer) ? !serverRunning : serverRunning;
+			btn.setEnabled(enable);
+			btn.setForeground(enable ? enabledFg : disabledFg);
+			btn.repaint();
+		}
+	}
+
+	/** Create play/stop/restart icons with a fixed color so we can set both normal and disabled icon. */
+	private static Icon createPlayIcon(int size, final Color color) {
+		return new Icon() {
+			@Override public int getIconWidth() { return size; }
+			@Override public int getIconHeight() { return size; }
+			@Override public void paintIcon(Component c, Graphics g, int x, int y) {
+				Graphics2D g2 = (Graphics2D) g.create();
+				g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+				g2.setColor(color);
+				GeneralPath play = new GeneralPath();
+				play.moveTo(x + 5, y + 3);
+				play.lineTo(x + 5, y + size - 3);
+				play.lineTo(x + size - 4, y + size / 2);
+				play.closePath();
+				g2.fill(play);
+				g2.dispose();
+			}
+		};
+	}
+	private static Icon createStopIcon(int size, final Color color) {
+		return new Icon() {
+			@Override public int getIconWidth() { return size; }
+			@Override public int getIconHeight() { return size; }
+			@Override public void paintIcon(Component c, Graphics g, int x, int y) {
+				Graphics2D g2 = (Graphics2D) g.create();
+				g2.setColor(color);
+				g2.fillRect(x + 5, y + 5, size - 10, size - 10);
+				g2.dispose();
+			}
+		};
+	}
+	private static Icon createRestartIcon(int size, final Color color) {
+		return new Icon() {
+			@Override public int getIconWidth() { return size; }
+			@Override public int getIconHeight() { return size; }
+			@Override public void paintIcon(Component c, Graphics g, int x, int y) {
+				Graphics2D g2 = (Graphics2D) g.create();
+				g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+				g2.setColor(color);
+				int cx = x + size / 2, cy = y + size / 2;
+				int rad = size / 2 - 2;
+				if (rad < 4) rad = 4;
+				// Arc like Edge: starts upper-right (35°), runs CCW to top-right (315°) — gap at top
+				Arc2D arc = new Arc2D.Float(cx - rad, cy - rad, rad * 2, rad * 2, 35, 280, Arc2D.OPEN);
+				java.awt.Stroke old = g2.getStroke();
+				g2.setStroke(new java.awt.BasicStroke(2f));
+				g2.draw(arc);
+				g2.setStroke(old);
+				// Arrow at end of arc (315° = top-right), tip pointing down-right (tangent direction)
+				double endRad = Math.toRadians(315);
+				double cos = Math.cos(endRad), sin = Math.sin(endRad);
+				double baseX = cx + rad * cos;
+				double baseY = cy + rad * sin;
+				double tx = -sin, ty = cos;  // tangent for CCW at 315° → down-right in Java
+				double tipLen = 5.5, halfBase = 3.5;
+				double tipX = baseX + tipLen * tx;
+				double tipY = baseY + tipLen * ty;
+				double px = cos * halfBase, py = sin * halfBase;  // perpendicular for base
+				GeneralPath arrow = new GeneralPath();
+				arrow.moveTo((float) tipX, (float) tipY);
+				arrow.lineTo((float) (baseX - px), (float) (baseY - py));
+				arrow.lineTo((float) (baseX + px), (float) (baseY + py));
+				arrow.closePath();
+				g2.fill(arrow);
+				g2.dispose();
+			}
+		};
+	}
+
+	/** Show icons (when useIcons true) or text (when false) on Start/Stop/Restart. Use setDisabledIcon so disabled state shows gray. */
+	private void applyServerButtonStyle(boolean useIcons) {
+		if (btnStartServer == null) return;
+		int size = 18;
+		Color enabledFg = UIManager.getColor("Button.foreground");
+		if (enabledFg == null) enabledFg = Color.BLACK;
+		Color disabledFg = UIManager.getColor("Button.disabledText");
+		if (disabledFg == null) disabledFg = Color.GRAY;
+		if (useIcons) {
+			btnStartServer.setText("");
+			btnStartServer.setIcon(createPlayIcon(size, enabledFg));
+			btnStartServer.setDisabledIcon(createPlayIcon(size, disabledFg));
+			btnStartServer.setToolTipText("Start Server");
+			btnStopServer.setText("");
+			btnStopServer.setIcon(createStopIcon(size, enabledFg));
+			btnStopServer.setDisabledIcon(createStopIcon(size, disabledFg));
+			btnStopServer.setToolTipText("Stop Server");
+			btnRestartServer.setText("");
+			btnRestartServer.setIcon(createRestartIcon(size, enabledFg));
+			btnRestartServer.setDisabledIcon(createRestartIcon(size, disabledFg));
+			btnRestartServer.setToolTipText("Restart Server");
+		} else {
+			btnStartServer.setIcon(null);
+			btnStartServer.setDisabledIcon(null);
+			btnStartServer.setText("Start Server");
+			btnStartServer.setToolTipText(null);
+			btnStopServer.setIcon(null);
+			btnStopServer.setDisabledIcon(null);
+			btnStopServer.setText("Stop Server");
+			btnStopServer.setToolTipText(null);
+			btnRestartServer.setIcon(null);
+			btnRestartServer.setDisabledIcon(null);
+			btnRestartServer.setText("Restart Server");
+			btnRestartServer.setToolTipText(null);
+		}
+	}
+
+	/** Current shutdown/restart countdown in seconds (from Settings tab spinner if built, else from settings). */
+	private int getShutdownCountdownSeconds() {
+		if (shutdownCountdownSpinner != null) {
+			Object v = shutdownCountdownSpinner.getValue();
+			if (v instanceof Number) return Math.max(0, ((Number) v).intValue());
+		}
+		return 0;
+	}
+
+	/** Runs countdown then stops (and sets restart flag if isRestart). Called from EDT. */
+	private void runShutdownOrRestartCountdown(int seconds, final boolean isRestart) {
+		String verb = isRestart ? "Restart" : "Shutdown";
+		try {
+			if (seconds <= 0) {
+				module.sendCommand("say Server " + verb + "!");
+				stopServer();
+				if (isRestart) restart = true;
+				return;
+			}
+			module.sendCommand("say Server " + verb + "!");
+			final int secs = seconds;
+			new Thread(() -> {
+				try {
+					for (int i = secs; i > 0; i--) {
+						boolean announce = (i == secs) || (i <= 10) || (i == 30) || (i == 60) || (i < secs && i % 60 == 0);
+						if (announce)
+							module.sendCommand("say " + verb + "ing in " + i + " second" + (i == 1 ? "" : "s") + (i == secs && secs >= 60 ? ". Get to a safe spot." : "."));
+						Thread.sleep(1000);
+					}
+				} catch (InterruptedException | ProcessException e1) {
+					Thread.currentThread().interrupt();
+					e1.printStackTrace();
+				}
+				try {
+					stopServer();
+					if (isRestart) restart = true;
+				} catch (ProcessException e) {
+					e.printStackTrace();
+				}
+			}).start();
+		} catch (ProcessException e1) {
+			e1.printStackTrace();
+		}
 	}
 
 	public void stopServer() throws ProcessException {
@@ -2610,9 +1967,99 @@ public class SpigotGUI extends JFrame {
 	}
 
 	public void addToConsole(String message) {
-		if (consoleStyleHelper != null) {
-			consoleStyleHelper.appendLine(message);
+		if (consoleStyleHelper == null) return;
+		// Run append and scroll on EDT so we can control whether the view scrolls at all.
+		SwingUtilities.invokeLater(() -> {
+			ignoreScrollBarUntil = System.currentTimeMillis() + 250;
+			boolean wasStick = consoleStickToBottom;
+			JViewport vp = consoleScrollPane != null ? consoleScrollPane.getViewport() : null;
+			Point savedPos = (vp != null && !wasStick) ? vp.getViewPosition() : null;
+
+			if (!wasStick && consoleTextPane != null) {
+				// Prevent the view from scrolling when we append: caret won't scroll to show new content.
+				DefaultCaret caret = (DefaultCaret) consoleTextPane.getCaret();
+				caret.setUpdatePolicy(DefaultCaret.NEVER_UPDATE);
+				try {
+					consoleStyleHelper.appendLine(message);
+					if (vp != null && savedPos != null) vp.setViewPosition(savedPos);
+				} finally {
+					caret.setUpdatePolicy(DefaultCaret.ALWAYS_UPDATE);
+				}
+			} else {
+				consoleStyleHelper.appendLine(message);
+				if (wasStick) scrollConsoleToBottom();
+			}
+			updateScrollStickyDebugCheckbox();
+		});
+	}
+
+	/** Updates {@link #consoleStickToBottom}: true if scroll bar is at bottom, false if user has scrolled up. */
+	private void updateConsoleStickToBottomFromScrollBar(AdjustmentEvent e) {
+		// When manual mode is on, sticky is controlled only by the checkbox.
+		if (manualConsoleScrollStickyMode) return;
+		// Never update sticky when we're scrolling from the command (one-time jump without re-sticking).
+		if (scrollingFromCommand) return;
+		// User-initiated scroll (drag thumb, wheel, page up/down) always updates sticky so we re-stick when they scroll to bottom even during heavy append.
+		// Programmatic scroll (our scroll or viewport restore) is ignored during ignoreScrollBarUntil.
+		boolean userInitiated = (e != null && isUserScrollAdjustment(e.getAdjustmentType()));
+		if (!userInitiated && System.currentTimeMillis() < ignoreScrollBarUntil) return;
+		if (consoleScrollPane == null) return;
+		javax.swing.JScrollBar bar = consoleScrollPane.getVerticalScrollBar();
+		if (bar == null || !bar.isVisible()) return;
+		int value = bar.getValue();
+		int extent = bar.getModel().getExtent();
+		int max = bar.getMaximum();
+		// At bottom when visible range reaches the end (small tolerance)
+		consoleStickToBottom = (value + extent >= max - 5);
+		updateScrollStickyDebugCheckbox();
+	}
+
+	/** True if the adjustment type is from direct user input (drag, wheel, page), not programmatic value change. */
+	private static boolean isUserScrollAdjustment(int adjustmentType) {
+		return adjustmentType == AdjustmentEvent.TRACK
+			|| adjustmentType == AdjustmentEvent.UNIT_INCREMENT
+			|| adjustmentType == AdjustmentEvent.UNIT_DECREMENT
+			|| adjustmentType == AdjustmentEvent.BLOCK_INCREMENT
+			|| adjustmentType == AdjustmentEvent.BLOCK_DECREMENT;
+	}
+
+	/** Scrolls the console view so the latest output is visible; called when stick-to-bottom is on. */
+	private void scrollConsoleToBottom() {
+		scrollConsoleToBottomOnly();
+		consoleStickToBottom = true; // we just scrolled to bottom, so stick until user scrolls up
+		updateScrollStickyDebugCheckbox();
+	}
+
+	/** Scrolls the console to the bottom without changing the sticky state (e.g. after user enters a command). */
+	@SuppressWarnings("deprecation")
+	private void scrollConsoleToBottomOnly() {
+		if (consoleTextPane == null) return;
+		try {
+			int len = consoleTextPane.getDocument().getLength();
+			consoleTextPane.setCaretPosition(len);
+			Rectangle r = consoleTextPane.modelToView(len);
+			if (r != null) {
+				consoleTextPane.scrollRectToVisible(r);
+			}
+		} catch (BadLocationException ignored) {}
+	}
+
+	/** Updates the debug checkbox to match {@link #consoleStickToBottom} (call on EDT). */
+	private void updateScrollStickyDebugCheckbox() {
+		if (chkConsoleScrollSticky != null) {
+			chkConsoleScrollSticky.setSelected(consoleStickToBottom);
 		}
+	}
+
+	/** If the given point in the text pane is over a link (http/https), returns the URL; otherwise null. */
+	@SuppressWarnings("deprecation")
+	private static String getLinkUrlAt(JTextPane textPane, Point p) {
+		int offs = textPane.viewToModel(p);
+		if (offs < 0) return null;
+		StyledDocument doc = (StyledDocument) textPane.getDocument();
+		javax.swing.text.Element el = doc.getCharacterElement(offs);
+		Object url = el.getAttributes().getAttribute(ConsoleStyleHelper.LINK_URL);
+		return (url instanceof String) ? (String) url : null;
 	}
 
 	/** Returns a Unicode-friendly monospace font for the console. */
@@ -2739,9 +2186,7 @@ public class SpigotGUI extends JFrame {
 					// TODO Auto-generated catch block
 					e.printStackTrace();
 				}
-
 			}
-
 		}
 
 		@Override
@@ -2770,7 +2215,6 @@ public class SpigotGUI extends JFrame {
 			super.onBukkitVersionDetected(version);
 
 			setVersionDisplay();
-
 		}
 
 		@Override
@@ -2778,25 +2222,15 @@ public class SpigotGUI extends JFrame {
 			super.onSpongeVersionDetected(version);
 
 			setVersionDisplay();
-
 		}
 
 		public void setVersionDisplay() {
-
-			if (getVersion() != null) {
-				setTitle("SpigotGUI Remastered (" + versionTag + ") - " + getVersion().getName() + " API [" + getServerType().getName() + "]");
-			}else {
-				setTitle("SpigotGUI Remastered (" + versionTag + ") - [" + getServerType().getName() + "]");
-			}
-
+			setTitle("SpigotGUI Remastered (" + versionTag + ") - [" + getServerType().getName() + "]");
 		}
 
 		@Override
 		public void onVersionDetected(String version) {
-			super.onVersionDetected(version);
-
 			setVersionDisplay();
-
 		}
 
 		@Override
@@ -2811,5 +2245,35 @@ public class SpigotGUI extends JFrame {
 			return false;
 		}
 		return server.isRunning();
+	}
+
+	/** Panel that paints a green (online) or red (offline) circle for server status. */
+	private static final class StatusCirclePanel extends JPanel {
+		private boolean online = false;
+
+		void setOnline(boolean online) {
+			if (this.online != online) {
+				this.online = online;
+				repaint();
+			}
+		}
+
+		@Override
+		protected void paintComponent(Graphics g) {
+			super.paintComponent(g);
+			Graphics2D g2 = (Graphics2D) g.create();
+			g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+			int w = getWidth();
+			int h = getHeight();
+			int d = (int) (Math.min(w, h) * 0.6);
+			if (d < 4) d = 4;
+			int x = (w - d) / 2;
+			int y = (h - d) / 2;
+			g2.setColor(online ? new Color(0, 180, 0) : new Color(200, 0, 0));
+			g2.fill(new Ellipse2D.Float(x, y, d, d));
+			g2.setColor(online ? new Color(0, 220, 0) : new Color(255, 80, 80));
+			g2.draw(new Ellipse2D.Float(x, y, d, d));
+			g2.dispose();
+		}
 	}
 }

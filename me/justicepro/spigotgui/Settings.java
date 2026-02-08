@@ -1,5 +1,7 @@
 package me.justicepro.spigotgui;
 
+import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.io.Serializable;
 
 public class Settings implements Serializable {
@@ -18,6 +20,12 @@ public class Settings implements Serializable {
 	private boolean openFilesInSystemDefault = false;
 	/** File editor theme name (e.g. "default", "dark", "eclipse"). Used for RSyntaxTextArea built-in themes. */
 	private String fileEditorTheme = "default";
+	/** When true, show the manual "Console scroll sticky" checkbox on the Console tab and do not auto-update sticky on scroll. */
+	private boolean manualConsoleScrollSticky = false;
+	/** When true, server control buttons (Start/Stop/Restart) show text; when false, they show icons only. */
+	private boolean serverButtonsUseText = false;
+	/** Seconds to wait before shutdown/restart when using countdown; 0 = immediate. Replaces old "exit timer" dropdown. */
+	private int shutdownCountdownSeconds = 0;
 
 	public Settings(ServerSettings serverSettings, Theme theme, Object fontSize) {
 		this.serverSettings = serverSettings;
@@ -50,6 +58,18 @@ public class Settings implements Serializable {
 	}
 
 	public Settings(ServerSettings serverSettings, Theme theme, Object fontSize, boolean consoleDarkMode, boolean consoleColorsEnabled, boolean openFilesInSystemDefault, String fileEditorTheme) {
+		this(serverSettings, theme, fontSize, consoleDarkMode, consoleColorsEnabled, openFilesInSystemDefault, fileEditorTheme, false);
+	}
+
+	public Settings(ServerSettings serverSettings, Theme theme, Object fontSize, boolean consoleDarkMode, boolean consoleColorsEnabled, boolean openFilesInSystemDefault, String fileEditorTheme, boolean manualConsoleScrollSticky) {
+		this(serverSettings, theme, fontSize, consoleDarkMode, consoleColorsEnabled, openFilesInSystemDefault, fileEditorTheme, manualConsoleScrollSticky, false);
+	}
+
+	public Settings(ServerSettings serverSettings, Theme theme, Object fontSize, boolean consoleDarkMode, boolean consoleColorsEnabled, boolean openFilesInSystemDefault, String fileEditorTheme, boolean manualConsoleScrollSticky, boolean serverButtonsUseText) {
+		this(serverSettings, theme, fontSize, consoleDarkMode, consoleColorsEnabled, openFilesInSystemDefault, fileEditorTheme, manualConsoleScrollSticky, serverButtonsUseText, 0);
+	}
+
+	public Settings(ServerSettings serverSettings, Theme theme, Object fontSize, boolean consoleDarkMode, boolean consoleColorsEnabled, boolean openFilesInSystemDefault, String fileEditorTheme, boolean manualConsoleScrollSticky, boolean serverButtonsUseText, int shutdownCountdownSeconds) {
 		this.serverSettings = serverSettings;
 		this.theme = theme;
 		this.fontSize = fontSize;
@@ -57,8 +77,11 @@ public class Settings implements Serializable {
 		this.consoleColorsEnabled = consoleColorsEnabled;
 		this.openFilesInSystemDefault = openFilesInSystemDefault;
 		this.fileEditorTheme = fileEditorTheme != null ? fileEditorTheme : "default";
+		this.manualConsoleScrollSticky = manualConsoleScrollSticky;
+		this.serverButtonsUseText = serverButtonsUseText;
+		this.shutdownCountdownSeconds = Math.max(0, shutdownCountdownSeconds);
 	}
-	
+
 	public ServerSettings getServerSettings() {
 		return serverSettings;
 	}
@@ -105,5 +128,35 @@ public class Settings implements Serializable {
 
 	public void setFileEditorTheme(String fileEditorTheme) {
 		this.fileEditorTheme = fileEditorTheme != null ? fileEditorTheme : "default";
+	}
+
+	public boolean isManualConsoleScrollSticky() {
+		return manualConsoleScrollSticky;
+	}
+
+	public void setManualConsoleScrollSticky(boolean manualConsoleScrollSticky) {
+		this.manualConsoleScrollSticky = manualConsoleScrollSticky;
+	}
+
+	public boolean isServerButtonsUseText() {
+		return serverButtonsUseText;
+	}
+
+	public void setServerButtonsUseText(boolean serverButtonsUseText) {
+		this.serverButtonsUseText = serverButtonsUseText;
+	}
+
+	public int getShutdownCountdownSeconds() {
+		return shutdownCountdownSeconds;
+	}
+
+	public void setShutdownCountdownSeconds(int shutdownCountdownSeconds) {
+		this.shutdownCountdownSeconds = Math.max(0, shutdownCountdownSeconds);
+	}
+
+	/** Backward compatibility: old settings files have no shutdownCountdownSeconds (default 0). Normalize after deserialize. */
+	private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
+		in.defaultReadObject();
+		if (shutdownCountdownSeconds < 0) shutdownCountdownSeconds = 0;
 	}
 }
