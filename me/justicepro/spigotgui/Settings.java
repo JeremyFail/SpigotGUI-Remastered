@@ -26,6 +26,8 @@ public class Settings implements Serializable {
 	private boolean serverButtonsUseText = false;
 	/** Seconds to wait before shutdown/restart when using countdown; 0 = immediate. Replaces old "exit timer" dropdown. */
 	private int shutdownCountdownSeconds = 0;
+	/** When true, console text wraps only at word boundaries (spaces); when false (default), wraps at any character. */
+	private boolean consoleWrapWordBreakOnly = false;
 
 	public Settings(ServerSettings serverSettings, Theme theme, Object fontSize) {
 		this.serverSettings = serverSettings;
@@ -70,6 +72,10 @@ public class Settings implements Serializable {
 	}
 
 	public Settings(ServerSettings serverSettings, Theme theme, Object fontSize, boolean consoleDarkMode, boolean consoleColorsEnabled, boolean openFilesInSystemDefault, String fileEditorTheme, boolean manualConsoleScrollSticky, boolean serverButtonsUseText, int shutdownCountdownSeconds) {
+		this(serverSettings, theme, fontSize, consoleDarkMode, consoleColorsEnabled, openFilesInSystemDefault, fileEditorTheme, manualConsoleScrollSticky, serverButtonsUseText, shutdownCountdownSeconds, false);
+	}
+
+	public Settings(ServerSettings serverSettings, Theme theme, Object fontSize, boolean consoleDarkMode, boolean consoleColorsEnabled, boolean openFilesInSystemDefault, String fileEditorTheme, boolean manualConsoleScrollSticky, boolean serverButtonsUseText, int shutdownCountdownSeconds, boolean consoleWrapWordBreakOnly) {
 		this.serverSettings = serverSettings;
 		this.theme = theme;
 		this.fontSize = fontSize;
@@ -80,6 +86,7 @@ public class Settings implements Serializable {
 		this.manualConsoleScrollSticky = manualConsoleScrollSticky;
 		this.serverButtonsUseText = serverButtonsUseText;
 		this.shutdownCountdownSeconds = Math.max(0, shutdownCountdownSeconds);
+		this.consoleWrapWordBreakOnly = consoleWrapWordBreakOnly;
 	}
 
 	public ServerSettings getServerSettings() {
@@ -152,6 +159,14 @@ public class Settings implements Serializable {
 
 	public void setShutdownCountdownSeconds(int shutdownCountdownSeconds) {
 		this.shutdownCountdownSeconds = Math.max(0, shutdownCountdownSeconds);
+	}
+
+	public boolean isConsoleWrapWordBreakOnly() {
+		return consoleWrapWordBreakOnly;
+	}
+
+	public void setConsoleWrapWordBreakOnly(boolean consoleWrapWordBreakOnly) {
+		this.consoleWrapWordBreakOnly = consoleWrapWordBreakOnly;
 	}
 
 	/** Backward compatibility: old settings files have no shutdownCountdownSeconds (default 0). Normalize after deserialize. */

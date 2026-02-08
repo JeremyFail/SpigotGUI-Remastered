@@ -176,6 +176,7 @@ public class SpigotGUI extends JFrame {
 	private JCheckBox manualConsoleScrollStickyCheckBox;
 	private JCheckBox serverButtonsUseTextCheckBox;
 	private JCheckBox disableConsoleColorsCheckBox;
+	private JCheckBox consoleWrapWordBreakOnlyCheckBox;
 	private JCheckBox openFilesInSystemDefaultCheckBox;
 	private JComboBox<String> fileEditorThemeBox;
 	private FileModel fileModel;
@@ -262,7 +263,7 @@ public class SpigotGUI extends JFrame {
 
 				String theme = themeBox.getItemAt(themeBox.getSelectedIndex());
 				
-				Settings s = new Settings(new ServerSettings(minRam.getValue(), maxRam.getValue(), customJvmArgsField.getText(), customJvmSwitchesField.getText(), jarFile), settings.getTheme(), fontSpinner.getValue(), consoleDarkModeCheckBox.isSelected(), !disableConsoleColorsCheckBox.isSelected(), openFilesInSystemDefaultCheckBox.isSelected(), getFileEditorThemeFromBox(), manualConsoleScrollStickyCheckBox != null && manualConsoleScrollStickyCheckBox.isSelected(), serverButtonsUseTextCheckBox != null && serverButtonsUseTextCheckBox.isSelected(), getShutdownCountdownSeconds());
+				Settings s = new Settings(new ServerSettings(minRam.getValue(), maxRam.getValue(), customJvmArgsField.getText(), customJvmSwitchesField.getText(), jarFile), settings.getTheme(), fontSpinner.getValue(), consoleDarkModeCheckBox.isSelected(), !disableConsoleColorsCheckBox.isSelected(), openFilesInSystemDefaultCheckBox.isSelected(), getFileEditorThemeFromBox(), manualConsoleScrollStickyCheckBox != null && manualConsoleScrollStickyCheckBox.isSelected(), serverButtonsUseTextCheckBox != null && serverButtonsUseTextCheckBox.isSelected(), getShutdownCountdownSeconds(), consoleWrapWordBreakOnlyCheckBox != null ? consoleWrapWordBreakOnlyCheckBox.isSelected() : settings.isConsoleWrapWordBreakOnly());
 				
 				for (Theme t : Theme.values()) {
 
@@ -303,7 +304,9 @@ public class SpigotGUI extends JFrame {
 
 		int fontSize = (int) settings.getFontSize();
 		Font consoleFont = getConsoleMonospaceFont(fontSize);
+		ConsoleStyleHelper.setConsoleWrapWordBreakOnly(settings.isConsoleWrapWordBreakOnly());
 		consoleTextPane = new JTextPane();
+		consoleTextPane.setEditorKit(new me.justicepro.spigotgui.Utils.WrapEditorKit());
 		consoleTextPane.setFont(consoleFont);
 		consoleTextPane.setEditable(false);
 		consoleTextPane.setMargin(new java.awt.Insets(4, 4, 4, 4));
@@ -313,6 +316,14 @@ public class SpigotGUI extends JFrame {
 		caret.setUpdatePolicy(DefaultCaret.ALWAYS_UPDATE);
 		scrollPane.setViewportView(consoleTextPane);
 		consoleScrollPane = scrollPane;
+		scrollPane.getViewport().addComponentListener(new java.awt.event.ComponentAdapter() {
+			@Override
+			public void componentResized(java.awt.event.ComponentEvent e) {
+				if (consoleTextPane != null) {
+					consoleTextPane.revalidate();
+				}
+			}
+		});
 		// Viewport ChangeListener can miss user scrolls; scroll bar AdjustmentListener fires when user scrolls (wheel or drag).
 		scrollPane.getVerticalScrollBar().addAdjustmentListener(new AdjustmentListener() {
 			@Override
@@ -951,6 +962,20 @@ public class SpigotGUI extends JFrame {
 			}
 		});
 
+		consoleWrapWordBreakOnlyCheckBox = new JCheckBox("Console text wrap on word-break only");
+		consoleWrapWordBreakOnlyCheckBox.setToolTipText("When unchecked (default), long lines wrap at any character so everything stays visible without a horizontal scrollbar. When checked, lines wrap only at spaces, so very long words or tokens may extend off-screen.");
+		consoleWrapWordBreakOnlyCheckBox.setSelected(settings.isConsoleWrapWordBreakOnly());
+		consoleWrapWordBreakOnlyCheckBox.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				ConsoleStyleHelper.setConsoleWrapWordBreakOnly(consoleWrapWordBreakOnlyCheckBox.isSelected());
+				if (consoleTextPane != null) {
+					consoleTextPane.revalidate();
+					consoleTextPane.repaint();
+				}
+			}
+		});
+
 		openFilesInSystemDefaultCheckBox = new JCheckBox("Open files in system default application");
 		openFilesInSystemDefaultCheckBox.setToolTipText("When checked, double-clicking a file in the Files tab opens it in your system's default application instead of the built-in editor.");
 		openFilesInSystemDefaultCheckBox.setSelected(settings.isOpenFilesInSystemDefault());
@@ -1150,6 +1175,7 @@ public class SpigotGUI extends JFrame {
 		c.gridy = 3; c.gridx = 0; c.gridwidth = 2; appearanceSection.add(consoleDarkModeCheckBox, c);
 		c.gridwidth = 1;
 		c.gridy = 4; c.gridx = 0; c.gridwidth = 2; appearanceSection.add(disableConsoleColorsCheckBox, c);
+		c.gridy = 5; c.gridx = 0; c.gridwidth = 2; appearanceSection.add(consoleWrapWordBreakOnlyCheckBox, c);
 		manualConsoleScrollStickyCheckBox = new JCheckBox("Manual console scroll sticky");
 		manualConsoleScrollStickyCheckBox.setToolTipText("<html>When checked, a \"Console scroll sticky\" checkbox appears on the Console tab.<br>You control whether the console auto-scrolls to the bottom by toggling that checkbox.<br>When unchecked, sticky is automatic: scroll to bottom to stick, scroll up to unstick.</html>");
 		manualConsoleScrollStickyCheckBox.setSelected(settings.isManualConsoleScrollSticky());
@@ -1161,12 +1187,12 @@ public class SpigotGUI extends JFrame {
 				if (manualConsoleScrollStickyMode) chkConsoleScrollSticky.setSelected(consoleStickToBottom);
 			}
 		});
-		c.gridy = 5; c.gridx = 0; c.gridwidth = 2; appearanceSection.add(manualConsoleScrollStickyCheckBox, c);
+		c.gridy = 6; c.gridx = 0; c.gridwidth = 2; appearanceSection.add(manualConsoleScrollStickyCheckBox, c);
 		serverButtonsUseTextCheckBox = new JCheckBox("Use text for server control buttons");
 		serverButtonsUseTextCheckBox.setToolTipText("When checked, Start/Stop/Restart show text. When unchecked, they show only icons (play, stop, refresh) with tooltips.");
 		serverButtonsUseTextCheckBox.setSelected(settings.isServerButtonsUseText());
 		serverButtonsUseTextCheckBox.addActionListener(e -> applyServerButtonStyle(!serverButtonsUseTextCheckBox.isSelected()));
-		c.gridy = 6; c.gridx = 0; c.gridwidth = 2; appearanceSection.add(serverButtonsUseTextCheckBox, c);
+		c.gridy = 7; c.gridx = 0; c.gridwidth = 2; appearanceSection.add(serverButtonsUseTextCheckBox, c);
 		minRam.setMinimumSize(new Dimension(50, minRam.getPreferredSize().height));
 		maxRam.setMinimumSize(new Dimension(50, maxRam.getPreferredSize().height));
 		fontSpinner.setMinimumSize(new Dimension(50, fontSpinner.getPreferredSize().height));

@@ -25,6 +25,17 @@ public final class ConsoleStyleHelper {
     /** Attribute key for clickable links: value is the URL String. When present, text is underlined and click opens the URL. */
     public static final Object LINK_URL = new String("ConsoleStyleHelper.linkUrl");
 
+    /** When true, console text wraps only at word boundaries (spaces); when false (default), wraps at any character so long lines never need horizontal scroll. */
+    private static volatile boolean consoleWrapWordBreakOnly = false;
+
+    public static void setConsoleWrapWordBreakOnly(boolean wordBreakOnly) {
+        consoleWrapWordBreakOnly = wordBreakOnly;
+    }
+
+    public static boolean isConsoleWrapWordBreakOnly() {
+        return consoleWrapWordBreakOnly;
+    }
+
     private static final Pattern URL_PATTERN = Pattern.compile("https?://[^\\s<>\"']+");
 
     /** Default text color for light background — black so it's readable on white */
