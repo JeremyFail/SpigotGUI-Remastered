@@ -1026,7 +1026,14 @@ public class SpigotGUI extends JFrame {
 		ce.gridx = 1; ce.weightx = 0; countdownEditPanel.add(shutdownCountdownSpinner, ce);
 		ce.insets = new Insets(0, 0, 0, 0);
 		ce.gridx = 2; ce.weightx = 1; ce.fill = GridBagConstraints.HORIZONTAL; countdownEditPanel.add(new JPanel(), ce);
-		ce.gridy = 1; ce.gridx = 0; ce.weightx = 0; ce.fill = GridBagConstraints.HORIZONTAL; countdownEditPanel.add(btnEditServerproperties, ce);
+		// Spacer row so there is visible gap between countdown row and Edit button row (match other section row spacing = 2*pad)
+		JPanel spacerRow = new JPanel();
+		int rowGap = pad * 2;
+		spacerRow.setPreferredSize(new Dimension(0, rowGap));
+		spacerRow.setMinimumSize(new Dimension(0, rowGap));
+		ce.gridy = 1; ce.gridx = 0; ce.gridwidth = 3; ce.weightx = 1; ce.fill = GridBagConstraints.HORIZONTAL; countdownEditPanel.add(spacerRow, ce);
+		ce.gridwidth = 1;
+		ce.gridy = 2; ce.gridx = 0; ce.weightx = 0; ce.fill = GridBagConstraints.HORIZONTAL; countdownEditPanel.add(btnEditServerproperties, ce);
 		ce.gridx = 1; ce.weightx = 0; ce.fill = GridBagConstraints.NONE; countdownEditPanel.add(new JPanel(), ce);
 		ce.gridx = 2; ce.weightx = 1; ce.fill = GridBagConstraints.HORIZONTAL; countdownEditPanel.add(new JPanel(), ce);
 		rc.gridy = 1; rc.gridheight = 2; serverSection.add(countdownEditPanel, rc);
@@ -1040,9 +1047,9 @@ public class SpigotGUI extends JFrame {
 		GridBagConstraints c = new GridBagConstraints();
 		c.insets = new Insets(pad, pad, pad, pad);
 		c.anchor = GridBagConstraints.WEST;
-		lblCustomArgs.setToolTipText("<html><b>Custom arguments</b> — Passed to the JVM as program arguments (e.g. <code>-Dproperty=value</code> for system properties).<br>These appear after the class/jar and before any application arguments. Use for JVM tuning and -D flags.</html>");
+		lblCustomArgs.setToolTipText("<html><b>Custom arguments</b> — Passed to the JVM as program arguments (e.g. <code>-Dproperty=value</code> for system properties).<br>These appear after the class/jar and before any application arguments. Use for JVM tuning and -D flags. Switches (above) are for launcher options.</html>");
 		customJvmArgsField.setToolTipText(lblCustomArgs.getToolTipText());
-		lblCustomSwitches.setToolTipText("<html><b>Custom switches</b> — Passed to the java launcher as command-line switches (e.g. <code>-Xmx2G</code>, <code>-XX:+UseG1GC</code>).<br>These appear before the class/jar. Use for memory, GC, and other JVM options. Arguments (above) are for -D and app-level; switches are for launcher options.</html>");
+		lblCustomSwitches.setToolTipText("<html><b>Custom switches</b> — Passed to the java launcher as command-line switches (e.g. <code>-Xmx2G</code>, <code>-XX:+UseG1GC</code>).<br>These appear before the class/jar. Use for memory, GC, and other JVM options. Arguments (below) are for -D and app-level; switches are for launcher options.</html>");
 		customJvmSwitchesField.setToolTipText(lblCustomSwitches.getToolTipText());
 		JScrollPane argsScroll = new JScrollPane(customJvmArgsField);
 		argsScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
@@ -1075,11 +1082,11 @@ public class SpigotGUI extends JFrame {
 			}
 		});
 		c.fill = GridBagConstraints.HORIZONTAL;
-		c.gridx = 0; c.gridy = 0; c.weightx = 0; jvmSection.add(lblCustomArgs, c);
-		c.gridx = 1; c.gridwidth = 2; c.weightx = 1; jvmSection.add(argsScroll, c);
-		c.gridwidth = 1;
-		c.gridy = 1; c.gridx = 0; c.weightx = 0; jvmSection.add(lblCustomSwitches, c);
+		c.gridx = 0; c.gridy = 0; c.weightx = 0; jvmSection.add(lblCustomSwitches, c);
 		c.gridx = 1; c.gridwidth = 2; c.weightx = 1; jvmSection.add(switchesScroll, c);
+		c.gridwidth = 1;
+		c.gridy = 1; c.gridx = 0; c.weightx = 0; jvmSection.add(lblCustomArgs, c);
+		c.gridx = 1; c.gridwidth = 2; c.weightx = 1; jvmSection.add(argsScroll, c);
 		c.gridwidth = 1;
 		int spinnerW = 90;
 		minRam.setPreferredSize(new Dimension(spinnerW, minRam.getPreferredSize().height));

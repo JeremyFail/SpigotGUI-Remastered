@@ -28,7 +28,7 @@ You can also download the source and compile it yourself using Apache Maven. Jus
 - **Players**: View players (name, last IP). Right‑click a player for **Op**, **De-Op**, **Kick**, or **Ban**. Pardon players who have been banned previously.
 - **Settings**: Manage settings for the server and for SpigotGUI. Hover over settings to learn more about what each one does.
     - **Server Settings** (set the server JAR file, edit the server.properties, set the server shutdown timer duration)
-    - **JVM/Run Options** (set arguments passed to the JVM/server when starting up such as RAM, arguments, and switches)
+    - **JVM/Run Options** (set values passed to the JVM/server when starting up such as RAM, arguments, and switches)
     - **File Settings** (configure how files are opened from the files tab)
     - **Appearance Settings** (set the overall application theme, file editor theme, console appearance settings)
 - **Files**: Browse the server directory (same folder as the JAR by default). Double‑click files to open them.
