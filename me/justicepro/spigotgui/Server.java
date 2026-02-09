@@ -122,5 +122,13 @@ public class Server {
 		}
 		
 	}
+
+	/**
+	 * Returns the underlying process (the shell that runs the server). Used by the Resources tab
+	 * to resolve the server's Java process via the shell's PID and OSHI.
+	 */
+	public Process getProcess() {
+		return process;
+	}
 	
 }

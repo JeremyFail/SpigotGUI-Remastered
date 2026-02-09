@@ -150,6 +150,8 @@ public class SpigotGUI extends JFrame {
 
 	public static Server server = null;
 
+	private ResourcesPanel resourcesPanel;
+
 	private JButton btnStartServer;
 	private JButton btnStopServer;
 	private JButton btnRestartServer;
@@ -273,6 +275,9 @@ public class SpigotGUI extends JFrame {
 
 				}
 				
+				if (resourcesPanel != null) {
+					resourcesPanel.stopPolling();
+				}
 				try {
 					saveSettings(s);
 				} catch (IOException e) {
@@ -847,8 +852,13 @@ public class SpigotGUI extends JFrame {
 				);
 		panel_1.setLayout(gl_panel_1);
 
+		// Resources tab: memory/CPU graph and stats (after Players, before Settings)
+		resourcesPanel = new ResourcesPanel(server, serverSettings);
+		resourcesPanel.startPolling();
+		tabbedPane.addTab("Resources", null, resourcesPanel, null);
+
 		JPanel panel_2 = new JPanel();
-		tabbedPane.addTab("Settings", null, panel_2, null);
+		// Settings tab is added later (before About/Help)
 
 		minRam = new JSpinner();
 		minRam.setModel(new SpinnerNumberModel(Integer.valueOf(1024), null, null, Integer.valueOf(1)));
@@ -1505,6 +1515,8 @@ public class SpigotGUI extends JFrame {
 				);
 		panel_6.setLayout(gl_panel_6);
 
+		tabbedPane.addTab("Settings", null, panel_2, null);
+
 		JPanel panel_5 = new JPanel();
 		tabbedPane.addTab("About/Help", null, panel_5, null);
 
@@ -1686,6 +1698,11 @@ public class SpigotGUI extends JFrame {
 
 	/** Reads max-players from server.properties if present; returns null if not found or not started. */
 	private String getServerMaxPlayers() {
+		return getServerMaxPlayersStatic();
+	}
+
+	/** Static version for use from ResourcesPanel etc. Reads max-players from server.properties. */
+	public static String getServerMaxPlayersStatic() {
 		try {
 			File f = new File("server.properties");
 			if (!f.canRead()) return null;
