@@ -2,7 +2,6 @@ package me.justicepro.spigotgui.Core;
 
 import java.awt.BorderLayout;
 import java.awt.Component;
-import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Color;
 import java.awt.FlowLayout;
@@ -11,31 +10,22 @@ import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.geom.Arc2D;
-import java.awt.geom.Ellipse2D;
 import java.awt.geom.GeneralPath;
 import java.awt.EventQueue;
 import java.awt.Font;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.awt.Insets;
 import java.awt.Point;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.AdjustmentEvent;
-import java.awt.event.AdjustmentListener;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.awt.Desktop;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Inet4Address;
-import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
@@ -45,49 +35,28 @@ import java.util.Vector;
 
 import javax.swing.Box;
 import javax.swing.BoxLayout;
-import javax.swing.DefaultComboBoxModel;
-import javax.swing.DefaultListModel;
-import javax.swing.GroupLayout;
-import javax.swing.GroupLayout.Alignment;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
-import javax.swing.JComboBox;
-import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
-import javax.swing.DefaultListCellRenderer;
 import javax.swing.Icon;
-import javax.swing.JList;
-import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
-import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.JViewport;
-import javax.swing.JSpinner;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.Timer;
 import javax.swing.JTextPane;
 import javax.swing.ToolTipManager;
-import javax.swing.JTextField;
-import javax.swing.LayoutStyle.ComponentPlacement;
-import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import javax.swing.UnsupportedLookAndFeelException;
 import javax.swing.border.EmptyBorder;
-import javax.swing.border.TitledBorder;
-import javax.swing.event.ChangeEvent;
-import javax.swing.event.ChangeListener;
-import javax.swing.event.PopupMenuEvent;
-import javax.swing.event.PopupMenuListener;
-import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.DefaultCaret;
-import javax.swing.text.StyledDocument;
 import javax.swing.tree.DefaultMutableTreeNode;
 
 import com.formdev.flatlaf.FlatLaf;
@@ -101,28 +70,28 @@ import me.justicepro.spigotgui.Server;
 import me.justicepro.spigotgui.ServerSettings;
 import me.justicepro.spigotgui.Settings;
 import me.justicepro.spigotgui.Theme;
-import me.justicepro.spigotgui.FileExplorer.FileEditor;
 import me.justicepro.spigotgui.FileExplorer.FileModel;
-import me.justicepro.spigotgui.Instructions.InstructionWindow;
 import me.justicepro.spigotgui.RemoteAdmin.CorePermissions;
-import me.justicepro.spigotgui.RemoteAdmin.LoginWindow;
 import me.justicepro.spigotgui.RemoteAdmin.Permission;
-import me.justicepro.spigotgui.RemoteAdmin.ServerWindow;
 import me.justicepro.spigotgui.RemoteAdmin.PacketHandlers.ServerHandler;
 import me.justicepro.spigotgui.RemoteAdmin.Server.RServer;
 import me.justicepro.spigotgui.Utils.ConsoleStyleHelper;
 import me.justicepro.spigotgui.Utils.Dialogs;
 import me.justicepro.spigotgui.Utils.Player;
 
+/**
+ * Main application frame for SpigotGUI Remastered. Builds the tabbed UI (Console, Players,
+ * Resources, Settings, Files, Module List, Remote Admin, About/Help) and coordinates server
+ * lifecycle, settings persistence, and console output. Tab content is delegated to panel classes
+ * in this package (ConsolePanel, PlayersPanel, FilesPanel, etc.); Settings and server top bar
+ * remain here for historical coupling with save/load and theme/accent logic.
+ */
 public class SpigotGUI extends JFrame {
 
+	// --- Window and layout ---
 	private static final int MIN_SIZE_BASE_WIDTH = 650;
 	private static final int MIN_SIZE_BASE_HEIGHT = 400;
-
 	private JPanel contentPane;
-	private JTextField consoleCommandInput;
-
-	private JSpinner shutdownCountdownSpinner;
 
 	private JTextPane consoleTextPane;
 	private ConsoleStyleHelper consoleStyleHelper;
@@ -137,22 +106,19 @@ public class SpigotGUI extends JFrame {
 	/** Drawn green/red circle for server status; replaces previous image-based icon. */
 	private StatusCirclePanel serverStatusCircle;
 
-	private JSpinner maxRam;
-	private JSpinner minRam;
-
 	private JLabel lblServerStatusText;
 
-	private JComboBox<String> themeBox;
 	/** Theme at app startup; used to decide if we can apply a new theme without restart (same family only). */
 	private static Theme initialThemeForSession;
 	/** Fixed size for theme label so it never changes when toggling text (avoids layout shift). */
 	private static int themeLabelWidth = 0;
 	private static int themeLabelHeight = 0;
-	private JLabel lblTheme;
 
 	public static Server server = null;
 
 	private ResourcesPanel resourcesPanel;
+	/** Settings tab; holds all settings controls and buildSettingsFromUI() for save. */
+	private SettingsPanel settingsPanel;
 
 	private JButton btnStartServer;
 	private JButton btnStopServer;
@@ -167,31 +133,14 @@ public class SpigotGUI extends JFrame {
 	private static Module module;
 
 	private boolean restart = false;
-	private JTextField customJvmArgsField;
-	private JTextField customJvmSwitchesField;
-	private JSpinner fontSpinner;
-	
-	private JCheckBox chkConsoleInputAsSay;
+
 	/** Manual control for console scroll sticky; visible only when Settings "Manual console scroll sticky" is on. */
 	private JCheckBox chkConsoleScrollSticky;
 	/** When true, sticky is controlled only by the manual checkbox; scroll bar does not update it. */
 	private boolean manualConsoleScrollStickyMode = false;
-	private JCheckBox consoleDarkModeCheckBox;
-	private JCheckBox manualConsoleScrollStickyCheckBox;
-	private JCheckBox serverButtonsUseTextCheckBox;
-	private JCheckBox disableConsoleColorsCheckBox;
-	private JCheckBox consoleWrapWordBreakOnlyCheckBox;
-	private JCheckBox openFilesInSystemDefaultCheckBox;
-	private JComboBox<String> fileEditorThemeBox;
-	/** Panel with accent color swatches for FlatLaf; used by getAccentColorRgbFromUI(). */
-	private AccentColorPanel accentColorPanel;
-	/** Shown when selected theme does not honor accent color (e.g. IntelliJ pack themes). */
-	private JLabel accentThemeControlledLabel;
 	/** Current settings (theme, accent, etc.); set in constructor. */
 	private Settings settings;
 	private FileModel fileModel;
-	/** Hovered index in the Files tab list for highlight; -1 when none. */
-	private int fileListHoverIndex = -1;
 
 	public static File jarFile;
 
@@ -295,17 +244,7 @@ public class SpigotGUI extends JFrame {
 					}
 				}
 
-				String theme = themeBox.getItemAt(themeBox.getSelectedIndex());
-				
-				Settings s = new Settings(new ServerSettings(minRam.getValue(), maxRam.getValue(), customJvmArgsField.getText(), customJvmSwitchesField.getText(), jarFile), settings.getTheme(), fontSpinner.getValue(), consoleDarkModeCheckBox.isSelected(), !disableConsoleColorsCheckBox.isSelected(), openFilesInSystemDefaultCheckBox.isSelected(), getFileEditorThemeFromBox(), manualConsoleScrollStickyCheckBox != null && manualConsoleScrollStickyCheckBox.isSelected(), serverButtonsUseTextCheckBox != null && serverButtonsUseTextCheckBox.isSelected(), getShutdownCountdownSeconds(), consoleWrapWordBreakOnlyCheckBox != null ? consoleWrapWordBreakOnlyCheckBox.isSelected() : settings.isConsoleWrapWordBreakOnly(), getAccentColorRgbFromUI());
-				
-				for (Theme t : Theme.values()) {
-
-					if (t.getName().equalsIgnoreCase(theme)) {
-						s.setTheme(t);
-					}
-
-				}
+				Settings s = settingsPanel.buildSettingsFromUI(jarFile);
 				
 				if (resourcesPanel != null) {
 					resourcesPanel.stopPolling();
@@ -334,106 +273,19 @@ public class SpigotGUI extends JFrame {
 
 		JTabbedPane tabbedPane = new JTabbedPane(JTabbedPane.TOP);
 
-		JPanel panel = new JPanel();
-		tabbedPane.addTab("Console", null, panel, null);
-
-		JScrollPane scrollPane = new JScrollPane();
-
+		// --- Console tab: built by ConsolePanel; we keep refs for addToConsole and Settings ---
 		int fontSize = (int) settings.getFontSize();
 		Font consoleFont = getConsoleMonospaceFont(fontSize);
-		ConsoleStyleHelper.setConsoleWrapWordBreakOnly(settings.isConsoleWrapWordBreakOnly());
-		consoleTextPane = new JTextPane();
-		consoleTextPane.setEditorKit(new me.justicepro.spigotgui.Utils.WrapEditorKit());
-		consoleTextPane.setFont(consoleFont);
-		consoleTextPane.setEditable(false);
-		consoleTextPane.setMargin(new java.awt.Insets(4, 4, 4, 4));
-		consoleStyleHelper = new ConsoleStyleHelper(consoleTextPane, consoleFont, settings.isConsoleDarkMode(), 500_000);
-		consoleStyleHelper.setColorsEnabled(settings.isConsoleColorsEnabled());
-		DefaultCaret caret = (DefaultCaret) consoleTextPane.getCaret();
-		caret.setUpdatePolicy(DefaultCaret.ALWAYS_UPDATE);
-		scrollPane.setViewportView(consoleTextPane);
-		consoleScrollPane = scrollPane;
-		scrollPane.getViewport().addComponentListener(new java.awt.event.ComponentAdapter() {
-			@Override
-			public void componentResized(java.awt.event.ComponentEvent e) {
-				if (consoleTextPane != null) {
-					consoleTextPane.revalidate();
-				}
-			}
-		});
-		// Viewport ChangeListener can miss user scrolls; scroll bar AdjustmentListener fires when user scrolls (wheel or drag).
-		scrollPane.getVerticalScrollBar().addAdjustmentListener(new AdjustmentListener() {
-			@Override
-			public void adjustmentValueChanged(AdjustmentEvent e) {
-				updateConsoleStickToBottomFromScrollBar(e);
-			}
-		});
-		// Clickable links: open http(s) URLs in the default browser when clicked.
-		consoleTextPane.addMouseListener(new MouseAdapter() {
-			@Override
-			public void mouseClicked(MouseEvent e) {
-				if (e.getButton() != MouseEvent.BUTTON1) return;
-				String url = getLinkUrlAt(consoleTextPane, e.getPoint());
-				if (url != null) {
-					try {
-						Desktop.getDesktop().browse(URI.create(url));
-					} catch (Exception ex) {
-						// ignore (e.g. no browser, invalid URL)
-					}
-				}
-			}
-		});
-		consoleTextPane.addMouseMotionListener(new MouseAdapter() {
-			@Override
-			public void mouseMoved(MouseEvent e) {
-				String url = getLinkUrlAt(consoleTextPane, e.getPoint());
-				consoleTextPane.setCursor(url != null ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
-			}
-		});
+		ConsolePanel consolePanel = new ConsolePanel(this, consoleFont, settings.isConsoleDarkMode(),
+				settings.isConsoleColorsEnabled(), settings.isConsoleWrapWordBreakOnly(),
+				settings.isManualConsoleScrollSticky(), consoleStickToBottom);
+		consoleTextPane = consolePanel.getConsoleTextPane();
+		consoleScrollPane = consolePanel.getConsoleScrollPane();
+		chkConsoleScrollSticky = consolePanel.getChkConsoleScrollSticky();
+		consoleStyleHelper = consolePanel.getConsoleStyleHelper();
+		manualConsoleScrollStickyMode = settings.isManualConsoleScrollSticky();
 
-		consoleCommandInput = new JTextField();
-		consoleCommandInput.setFont(consoleFont);
-		consoleCommandInput.setMargin(new Insets(4, 6, 4, 6));
-		consoleCommandInput.setPreferredSize(new Dimension(consoleCommandInput.getPreferredSize().width, 26));
-		consoleCommandInput.setMinimumSize(new Dimension(60, 26));
-		consoleCommandInput.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent arg0) {
-
-				if (server != null) {
-
-					if (server.isRunning()) {
-
-						try {
-							
-							if (chkConsoleInputAsSay.isSelected()) {
-								server.sendCommand("say " + consoleCommandInput.getText());
-							}else {
-								server.sendCommand(consoleCommandInput.getText());
-							}
-							
-						} catch (ProcessException e) {
-							// TODO Auto-generated catch block
-							e.printStackTrace();
-						}
-						consoleCommandInput.setText("");
-						// Scroll to bottom after a short delay so the server's echo of the command has time to appear.
-						Timer scrollAfterCommand = new Timer(150, e -> {
-							scrollingFromCommand = true;
-							ignoreScrollBarUntil = System.currentTimeMillis() + 250;
-							scrollConsoleToBottomOnly();
-							SwingUtilities.invokeLater(() -> scrollingFromCommand = false);
-						});
-						scrollAfterCommand.setRepeats(false);
-						scrollAfterCommand.start();
-
-					}
-
-				}
-
-			}
-		});
-		consoleCommandInput.setColumns(10);
-
+		// --- Top bar: server controls and status (visible in all tabs) ---
 		btnStartServer = new JButton("Start Server");
 		btnStartServer.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
@@ -511,22 +363,6 @@ public class SpigotGUI extends JFrame {
 		lblServerStatusText.setMinimumSize(new Dimension(130, 20));
 		lblServerStatusText.setPreferredSize(new Dimension(130, 20));
 
-		chkConsoleScrollSticky = new JCheckBox("Console scroll sticky");
-		chkConsoleScrollSticky.setSelected(consoleStickToBottom);
-		chkConsoleScrollSticky.setToolTipText("When checked, the console will auto-scroll to the bottom when new lines arrive. When unchecked, it stays at the current position.");
-		manualConsoleScrollStickyMode = settings.isManualConsoleScrollSticky();
-		chkConsoleScrollSticky.setVisible(manualConsoleScrollStickyMode);
-		chkConsoleScrollSticky.setEnabled(manualConsoleScrollStickyMode);
-		chkConsoleScrollSticky.addActionListener(e -> {
-			if (manualConsoleScrollStickyMode) {
-				consoleStickToBottom = chkConsoleScrollSticky.isSelected();
-				updateScrollStickyDebugCheckbox();
-			}
-		});
-
-		chkConsoleInputAsSay = new JCheckBox("Console for /say");
-		chkConsoleInputAsSay.setToolTipText("When checked, your console input is sent as \"say <text>\", so it appears as a server message in game chat. When unchecked, input is sent as a raw command.");
-
 		// Top bar: server controls (left), server IP (center), status (right), visible in all tabs
 		JPanel topBar = new JPanel(new BorderLayout(0, 0));
 		JPanel topBarLeft = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
@@ -546,1106 +382,39 @@ public class SpigotGUI extends JFrame {
 		tabbedPane.setBorder(new EmptyBorder(8, 0, 0, 0));
 		contentPane.add(tabbedPane, BorderLayout.CENTER);
 
-		GroupLayout gl_panel = new GroupLayout(panel);
-		gl_panel.setHorizontalGroup(
-			gl_panel.createParallelGroup(Alignment.LEADING)
-				.addComponent(scrollPane, GroupLayout.DEFAULT_SIZE, 650, Short.MAX_VALUE)
-				.addGroup(gl_panel.createSequentialGroup()
-					.addGap(10)
-					.addComponent(consoleCommandInput, GroupLayout.DEFAULT_SIZE, 640, Short.MAX_VALUE)
-					.addGap(10))
-				.addGroup(gl_panel.createSequentialGroup()
-					.addContainerGap()
-					.addComponent(chkConsoleInputAsSay)
-					.addPreferredGap(ComponentPlacement.RELATED)
-					.addComponent(chkConsoleScrollSticky)
-					.addContainerGap(GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-		);
-		gl_panel.setVerticalGroup(
-			gl_panel.createParallelGroup(Alignment.LEADING)
-				.addGroup(gl_panel.createSequentialGroup()
-					.addComponent(scrollPane, GroupLayout.DEFAULT_SIZE, 383, Short.MAX_VALUE)
-					.addPreferredGap(ComponentPlacement.RELATED)
-					.addComponent(consoleCommandInput, GroupLayout.PREFERRED_SIZE, 26, GroupLayout.PREFERRED_SIZE)
-					.addPreferredGap(ComponentPlacement.RELATED)
-					.addGroup(gl_panel.createParallelGroup(Alignment.BASELINE)
-						.addComponent(chkConsoleInputAsSay)
-						.addComponent(chkConsoleScrollSticky))
-					.addGap(3))
-		);
-		panel.setLayout(gl_panel);
+		tabbedPane.addTab("Console", null, consolePanel, null);
 
-		JPanel panel_1 = new JPanel();
-		tabbedPane.addTab("Players", null, panel_1, null);
-
-		JScrollPane scrollPane_1 = new JScrollPane();
-
-		playersTable = new JTable();
-
-		playersTable.setModel(new DefaultTableModel(
-				new String[] { "Username", "Running IP" },
-				0
-				));
-		lblPlayersOnlineCount = new JLabel("Players online: 0");
-		scrollPane_1.setViewportView(playersTable);
+		// --- Players tab ---
+		PlayersPanel playersPanel = new PlayersPanel(this);
+		playersTable = playersPanel.getPlayersTable();
+		lblPlayersOnlineCount = playersPanel.getLblPlayersOnlineCount();
+		tabbedPane.addTab("Players", null, playersPanel, null);
 
 		setActive(false);
 		updateServerButtonStates(false);
-
 		setTableAsList(playersTable, players);
-
-		JMenuItem mntmPlayerName = new JMenuItem("Player Name");
-
-		JPopupMenu popupMenu = new JPopupMenu();
-		popupMenu.addPopupMenuListener(new PopupMenuListener() {
-			public void popupMenuCanceled(PopupMenuEvent arg0) {}
-			public void popupMenuWillBecomeInvisible(PopupMenuEvent arg0) {}
-			public void popupMenuWillBecomeVisible(PopupMenuEvent arg0) {
-				int row = playersTable.getSelectedRow();
-				if (row < 0) return;
-				Object val = playersTable.getModel().getValueAt(row, 0);
-				String player = (val == null) ? "" : val.toString().trim();
-				mntmPlayerName.setText(player.isEmpty() ? "(no player)" : player);
-			}
-		});
-		// Only show context menu when right-clicking on a row that has a player name (not empty/null)
-		playersTable.addMouseListener(new MouseAdapter() {
-			@Override
-			public void mousePressed(MouseEvent e) {
-				if (e.isPopupTrigger()) showPlayersPopupIfRowValid(e);
-			}
-			@Override
-			public void mouseReleased(MouseEvent e) {
-				if (e.isPopupTrigger()) showPlayersPopupIfRowValid(e);
-			}
-			private void showPlayersPopupIfRowValid(MouseEvent e) {
-				int row = playersTable.rowAtPoint(e.getPoint());
-				if (row < 0) return;
-				Object val = playersTable.getModel().getValueAt(row, 0);
-				String player = (val == null) ? "" : val.toString().trim();
-				if (player.isEmpty() || "(No players online)".equals(player)) return;
-				playersTable.setRowSelectionInterval(row, row);
-				popupMenu.show(playersTable, e.getX(), e.getY());
-			}
-		});
-
-		JMenuItem mntmOp = new JMenuItem("Op");
-		mntmOp.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent arg0) {
-
-				if (server != null) {
-					if (!server.isRunning()) {
-						JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
-						return;
-					}
-				} else {
-					JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
-					return;
-				}
-				String player = playersTable.getModel().getValueAt(playersTable.getSelectedRow(), 0) + "";
-				try {
-					module.sendCommand("op " + player);
-				} catch (ProcessException e) {
-					e.printStackTrace();
-				}
-			}
-		});
-
-		popupMenu.add(mntmPlayerName);
-
-		JMenuItem menuItem_1 = new JMenuItem(" ");
-		popupMenu.add(menuItem_1);
-		popupMenu.add(mntmOp);
-
-		JMenuItem mntmDeop = new JMenuItem("De-Op");
-		mntmDeop.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-
-				if (server != null) {
-					if (!server.isRunning()) {
-						JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
-						return;
-					}
-				} else {
-					JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
-					return;
-				}
-				String player = playersTable.getModel().getValueAt(playersTable.getSelectedRow(), 0) + "";
-				try {
-					module.sendCommand("deop " + player);
-				} catch (ProcessException ex) {
-					ex.printStackTrace();
-				}
-			}
-		});
-		popupMenu.add(mntmDeop);
-
-		JMenuItem mntmKick = new JMenuItem("Kick");
-		mntmKick.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-
-				if (server != null) {
-					if (!server.isRunning()) {
-						JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
-						return;
-					}
-				} else {
-					JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
-					return;
-				}
-				String player = playersTable.getModel().getValueAt(playersTable.getSelectedRow(), 0) + "";
-				try {
-					if (JOptionPane.showConfirmDialog(SpigotGUI.this, "Are you sure you want to kick " + player + "?", "Kick", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
-						String reason = JOptionPane.showInputDialog(SpigotGUI.this, "Reason?");
-						module.sendCommand("kick " + player + (reason != null ? " " + reason : ""));
-					}
-				} catch (ProcessException ex) {
-					ex.printStackTrace();
-				}
-			}
-		});
-		popupMenu.add(mntmKick);
-
-		JMenuItem mntmBan = new JMenuItem("Ban");
-		mntmBan.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-
-				if (server != null) {
-					if (!server.isRunning()) {
-						JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
-						return;
-					}
-				} else {
-					JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
-					return;
-				}
-				String player = playersTable.getModel().getValueAt(playersTable.getSelectedRow(), 0) + "";
-				try {
-					if (JOptionPane.showConfirmDialog(SpigotGUI.this, "Are you sure you want to ban " + player + "?", "Ban", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
-						String reason = JOptionPane.showInputDialog(SpigotGUI.this, "Reason?");
-						module.sendCommand("ban " + player + (reason != null ? " " + reason : ""));
-					}
-				} catch (ProcessException ex) {
-					ex.printStackTrace();
-				}
-			}
-		});
-		popupMenu.add(mntmBan);
-
-		JButton btnPardon = new JButton("Pardon a Player");
-		btnPardon.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				String player = JOptionPane.showInputDialog(SpigotGUI.this, "Player Name");
-				if (player == null || player.trim().isEmpty()) return;
-				player = player.trim();
-				try {
-					if (JOptionPane.showConfirmDialog(SpigotGUI.this, "Are you sure you want to pardon " + player + "?", "Pardon", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
-						module.sendCommand("pardon " + player);
-					}
-				} catch (ProcessException ex) {
-					ex.printStackTrace();
-				}
-			}
-		});
-
-		JButton btnKick = new JButton("Kick");
-		btnKick.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent arg0) {
-
-				if (server != null) {
-
-					if (!server.isRunning()) {
-						JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
-						return;
-					}
-				} else {
-					JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
-					return;
-				}
-				String player = playersTable.getModel().getValueAt(playersTable.getSelectedRow(), 0) + "";
-				try {
-					if (JOptionPane.showConfirmDialog(SpigotGUI.this, "Are you sure you want to kick " + player + "?", "Kick", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
-						String reason = JOptionPane.showInputDialog(SpigotGUI.this, "Reason?");
-						module.sendCommand("kick " + player + (reason != null ? " " + reason : ""));
-					}
-				} catch (ProcessException ex) {
-					ex.printStackTrace();
-				}
-			}
-		});
-
-		JButton btnBan = new JButton("Ban");
-		btnBan.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-
-				if (server != null) {
-
-					if (!server.isRunning()) {
-						JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
-						return;
-					}
-				} else {
-					JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
-					return;
-				}
-				String player = playersTable.getModel().getValueAt(playersTable.getSelectedRow(), 0) + "";
-				try {
-					if (JOptionPane.showConfirmDialog(SpigotGUI.this, "Are you sure you want to ban " + player + "?", "Ban", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
-						String reason = JOptionPane.showInputDialog(SpigotGUI.this, "Reason?");
-						module.sendCommand("ban " + player + (reason != null ? " " + reason : ""));
-					}
-				} catch (ProcessException ex) {
-					ex.printStackTrace();
-				}
-			}
-		});
-
-		JButton btnOp = new JButton("Op");
-		btnOp.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent arg0) {
-
-				if (server != null) {
-
-					if (!server.isRunning()) {
-						JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
-						return;
-					}
-				} else {
-					JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
-					return;
-				}
-				String player = playersTable.getModel().getValueAt(playersTable.getSelectedRow(), 0) + "";
-				try {
-					module.sendCommand("op " + player);
-				} catch (ProcessException e) {
-					e.printStackTrace();
-				}
-			}
-		});
-
-		JButton btnDeop = new JButton("De-Op");
-		btnDeop.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				if (server != null) {
-					if (!server.isRunning()) {
-						JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
-						return;
-					}
-				} else {
-					JOptionPane.showMessageDialog(SpigotGUI.this, "There is no server running");
-					return;
-				}
-				String player = playersTable.getModel().getValueAt(playersTable.getSelectedRow(), 0) + "";
-				try {
-					module.sendCommand("deop " + player);
-				} catch (ProcessException ex) {
-					ex.printStackTrace();
-				}
-			}
-		});
-		GroupLayout gl_panel_1 = new GroupLayout(panel_1);
-		gl_panel_1.setHorizontalGroup(
-				gl_panel_1.createParallelGroup(Alignment.LEADING)
-				.addGroup(gl_panel_1.createSequentialGroup()
-						.addGap(12)
-						.addGroup(gl_panel_1.createParallelGroup(Alignment.LEADING)
-								.addGroup(gl_panel_1.createSequentialGroup()
-										.addComponent(btnKick)
-										.addPreferredGap(ComponentPlacement.RELATED)
-										.addComponent(btnBan)
-										.addPreferredGap(ComponentPlacement.RELATED)
-										.addComponent(btnOp)
-										.addPreferredGap(ComponentPlacement.RELATED)
-										.addComponent(btnDeop)
-										.addPreferredGap(ComponentPlacement.RELATED, 0, Short.MAX_VALUE)
-										.addComponent(btnPardon, GroupLayout.PREFERRED_SIZE, 142, GroupLayout.PREFERRED_SIZE))
-								.addGroup(gl_panel_1.createParallelGroup(Alignment.LEADING)
-										.addComponent(lblPlayersOnlineCount)
-										.addComponent(scrollPane_1, GroupLayout.DEFAULT_SIZE, 626, Short.MAX_VALUE)))
-						.addContainerGap())
-				);
-		gl_panel_1.setVerticalGroup(
-				gl_panel_1.createParallelGroup(Alignment.TRAILING)
-				.addGroup(gl_panel_1.createSequentialGroup()
-						.addContainerGap()
-						.addComponent(lblPlayersOnlineCount)
-						.addPreferredGap(ComponentPlacement.RELATED)
-						.addComponent(scrollPane_1, GroupLayout.DEFAULT_SIZE, 430, Short.MAX_VALUE)
-						.addPreferredGap(ComponentPlacement.RELATED)
-						.addGroup(gl_panel_1.createParallelGroup(Alignment.BASELINE)
-								.addComponent(btnKick)
-								.addComponent(btnBan)
-								.addComponent(btnOp)
-								.addComponent(btnDeop)
-								.addComponent(btnPardon))
-						.addPreferredGap(ComponentPlacement.RELATED)
-						.addGap(6)
-						.addContainerGap())
-				);
-		panel_1.setLayout(gl_panel_1);
 
 		// Resources tab: memory/CPU graph and stats (after Players, before Settings)
 		resourcesPanel = new ResourcesPanel(serverSettings);
 		resourcesPanel.startPolling();
 		tabbedPane.addTab("Resources", null, resourcesPanel, null);
 
-		JPanel panel_2 = new JPanel();
-		// Settings tab is added later (before About/Help)
+		// --- Settings tab (built by SettingsPanel) ---
+		settingsPanel = new SettingsPanel(this, settings, serverSettings);
 
-		minRam = new JSpinner();
-		minRam.setModel(new SpinnerNumberModel(Integer.valueOf(1024), null, null, Integer.valueOf(1)));
+		// --- Files tab ---
+		FilesPanel filesPanel = new FilesPanel(this, getDefaultDirectory(), settings.isOpenFilesInSystemDefault());
+		fileModel = filesPanel.getFileModel();
+		tabbedPane.addTab("Files", null, filesPanel, null);
 
-		maxRam = new JSpinner();
-		maxRam.setModel(new SpinnerNumberModel(Integer.valueOf(1024), null, null, Integer.valueOf(1)));
-		
-		JLabel lblMinRam = new JLabel("Min RAM");
-		lblMinRam.setHorizontalAlignment(SwingConstants.LEFT);
+		// --- Module List tab ---
+		tabbedPane.addTab("Module List", null, new ModuleListPanel(), null);
 
-		JLabel lblMaxRam = new JLabel("Max RAM");
-		lblMaxRam.setHorizontalAlignment(SwingConstants.LEFT);
+		tabbedPane.addTab("Remote Admin", null, new RemoteAdminPanel(this), null);
 
-		customJvmArgsField = new JTextField();
-		
-		customJvmArgsField.setColumns(10);
+		tabbedPane.addTab("Settings", null, settingsPanel, null);
 
-		customJvmSwitchesField = new JTextField();
-		customJvmSwitchesField.setColumns(10);
-		
-		fontSpinner = new JSpinner();
-		fontSpinner.addChangeListener(new ChangeListener() {
-			public void stateChanged(ChangeEvent arg0) {
-				Font newFont = getConsoleMonospaceFont((int) fontSpinner.getValue());
-				consoleTextPane.setFont(newFont);
-				if (consoleStyleHelper != null) {
-					consoleStyleHelper.setBaseFont(newFont);
-				}
-			}
-		});
-		
-		fontSpinner.setModel(new SpinnerNumberModel(Integer.valueOf(13), null, null, Integer.valueOf(1)));
-		
-		minRam.setValue(serverSettings.getMinRam());
-		maxRam.setValue(serverSettings.getMaxRam());
-		fontSpinner.setValue(settings.getFontSize());
-		customJvmArgsField.setText(serverSettings.getCustomArgs());
-		customJvmSwitchesField.setText(serverSettings.getCustomSwitches());
-		
-		JLabel lblCustomArgs = new JLabel("Custom Arguments");
-		JLabel lblCustomSwitches = new JLabel("Custom Switches");
-		
-		JTextField serverFileField = new JTextField(30);
-		serverFileField.setEditable(false);
-		serverFileField.setToolTipText("Path to the server JAR file. Use \"Set Server File\" to change.");
-		serverFileField.setText(jarFile != null ? jarFile.getAbsolutePath() : new File("server.jar").getAbsolutePath());
-
-		JButton btnSetJarFile = new JButton("Set Server File");
-		btnSetJarFile.setToolTipText("Choose the server JAR file to run (e.g. paper.jar, spigot.jar).");
-		btnSetJarFile.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				File jarDir = getDefaultDirectory();
-				JFileChooser fileChooser = new JFileChooser();
-				fileChooser.setCurrentDirectory(jarDir);
-				fileChooser.setFileFilter(new FileNameExtensionFilter("Jar file (*.jar)", "jar"));
-				if (jarFile != null && jarFile.getParentFile() != null) fileChooser.setSelectedFile(jarFile);
-				if (fileChooser.showOpenDialog(SpigotGUI.this) == JFileChooser.APPROVE_OPTION) {
-					jarFile = fileChooser.getSelectedFile();
-					serverFileField.setText(jarFile.getAbsolutePath());
-				}
-			}
-		});
-		
-		JLabel lblFontSize = new JLabel("Console font size");
-
-		lblTheme = new JLabel("Theme (may require restart)");
-		themeBox = new JComboBox<String>();
-		String[] availableThemeNames = new String[Theme.getAvailableThemes().length];
-		int i = 0;
-		for (Theme t : Theme.getAvailableThemes()) availableThemeNames[i++] = t.getName();
-		themeBox.setModel(new DefaultComboBoxModel<>(availableThemeNames));
-		themeBox.setSelectedItem(settings.getTheme().getName());
-		updateThemeLabelFor(settings.getTheme());
-		themeBox.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent arg0) {
-				String themeName = themeBox.getSelectedItem() + "";
-				if (themeName.isEmpty()) return;
-				Theme theme = Theme.fromDisplayName(themeName);
-				if (theme == null) return;
-				boolean sameFamily = (initialThemeForSession != null && initialThemeForSession.getFamily() == theme.getFamily());
-				if (sameFamily) {
-					try {
-						UIManager.setLookAndFeel(theme.getLookAndFeel());
-						SwingUtilities.updateComponentTreeUI(SpigotGUI.this);
-					} catch (ClassNotFoundException | InstantiationException | IllegalAccessException
-							| UnsupportedLookAndFeelException e) {
-						e.printStackTrace();
-					}
-				}
-				updateThemeLabelFor(theme);
-				updateAccentPanelForTheme(theme);
-			}
-		});
-
-		consoleDarkModeCheckBox = new JCheckBox("Console dark mode");
-		consoleDarkModeCheckBox.setToolTipText("Use a dark background in the console tab. When unchecked, the console uses a light background.");
-		consoleDarkModeCheckBox.setSelected(settings.isConsoleDarkMode());
-		consoleDarkModeCheckBox.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				if (consoleStyleHelper != null) {
-					consoleStyleHelper.setDarkMode(consoleDarkModeCheckBox.isSelected());
-				}
-			}
-		});
-
-		disableConsoleColorsCheckBox = new JCheckBox("Disable console colors");
-		disableConsoleColorsCheckBox.setToolTipText("When checked, console text is shown in the default color only (no ANSI or § colors).");
-		disableConsoleColorsCheckBox.setSelected(!settings.isConsoleColorsEnabled());
-		disableConsoleColorsCheckBox.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				if (consoleStyleHelper != null) {
-					consoleStyleHelper.setColorsEnabled(!disableConsoleColorsCheckBox.isSelected());
-				}
-			}
-		});
-
-		consoleWrapWordBreakOnlyCheckBox = new JCheckBox("Console text wrap on word-break only");
-		consoleWrapWordBreakOnlyCheckBox.setToolTipText("When unchecked (default), long lines wrap at any character so everything stays visible without a horizontal scrollbar. When checked, lines wrap only at spaces, so very long words or tokens may extend off-screen.");
-		consoleWrapWordBreakOnlyCheckBox.setSelected(settings.isConsoleWrapWordBreakOnly());
-		consoleWrapWordBreakOnlyCheckBox.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				ConsoleStyleHelper.setConsoleWrapWordBreakOnly(consoleWrapWordBreakOnlyCheckBox.isSelected());
-				if (consoleTextPane != null) {
-					consoleTextPane.revalidate();
-					consoleTextPane.repaint();
-				}
-			}
-		});
-
-		openFilesInSystemDefaultCheckBox = new JCheckBox("Open files in system default application");
-		openFilesInSystemDefaultCheckBox.setToolTipText("When checked, double-clicking a file in the Files tab opens it in your system's default application instead of the built-in editor.");
-		openFilesInSystemDefaultCheckBox.setSelected(settings.isOpenFilesInSystemDefault());
-		openFilesInSystemDefaultCheckBox.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				if (fileModel != null) {
-					fileModel.setOpenInSystemDefault(openFilesInSystemDefaultCheckBox.isSelected());
-				}
-			}
-		});
-
-		JButton btnEditServerproperties = new JButton("Edit Server.Properties");
-		btnEditServerproperties.setToolTipText("Edit the server.properties file.");
-		btnEditServerproperties.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent arg0) {
-				File serverProps = new File("server.properties");
-				if (openFilesInSystemDefaultCheckBox != null && openFilesInSystemDefaultCheckBox.isSelected()) {
-					try {
-						Desktop.getDesktop().open(serverProps);
-					} catch (IOException e) {
-						JOptionPane.showMessageDialog(SpigotGUI.this, "Could not open: " + e.getMessage());
-					}
-				} else {
-					FileEditor fileEditor = new FileEditor();
-					fileEditor.setLocationRelativeTo(SpigotGUI.this);
-					try {
-						fileEditor.openFile(serverProps);
-					} catch (IOException e) {
-						e.printStackTrace();
-					}
-					fileEditor.setVisible(true);
-				}
-			}
-		});
-		
-		// --- Settings layout: scrollable sectioned panels (content does not stretch vertically) ---
-		int pad = 6;
-		JPanel settingsContentInner = new JPanel();
-		settingsContentInner.setLayout(new BoxLayout(settingsContentInner, BoxLayout.Y_AXIS));
-		settingsContentInner.setBorder(new EmptyBorder(10, 10, 10, 10));
-
-		// Section: Server - each row has its own layout (columns do not align across rows)
-		JPanel serverSection = new JPanel();
-		serverSection.setBorder(new TitledBorder(null, "Server", TitledBorder.LEADING, TitledBorder.TOP));
-		serverSection.setLayout(new GridBagLayout());
-		GridBagConstraints rc = new GridBagConstraints();
-		rc.fill = GridBagConstraints.HORIZONTAL;
-		rc.weightx = 1;
-		rc.gridwidth = 1;
-		rc.anchor = GridBagConstraints.WEST;
-		rc.insets = new Insets(pad, pad, pad, pad);
-		int serverBtnW = 120;
-		btnSetJarFile.setPreferredSize(new Dimension(serverBtnW, btnSetJarFile.getPreferredSize().height));
-		// Row 1: flexible text field + fixed Set Server File button
-		JPanel row1 = new JPanel(new BorderLayout(8, 0));
-		row1.add(serverFileField, BorderLayout.CENTER);
-		row1.add(btnSetJarFile, BorderLayout.EAST);
-		rc.gridx = 0; rc.gridy = 0; serverSection.add(row1, rc);
-		JLabel lblShutdownCountdown = new JLabel("Shutdown/restart countdown (seconds)");
-		lblShutdownCountdown.setMinimumSize(new Dimension(lblShutdownCountdown.getFontMetrics(lblShutdownCountdown.getFont()).stringWidth("Shutdown/restart countdown (seconds)") + 8, lblShutdownCountdown.getPreferredSize().height));
-		lblShutdownCountdown.setToolTipText("When you click Stop or Restart, wait this many seconds before actually stopping (announces in chat). 0 = immediate.");
-		shutdownCountdownSpinner = new JSpinner(new SpinnerNumberModel(Math.max(0, settings.getShutdownCountdownSeconds()), 0, 86400, 1));
-		shutdownCountdownSpinner.setToolTipText(lblShutdownCountdown.getToolTipText());
-		shutdownCountdownSpinner.setPreferredSize(new Dimension(90, shutdownCountdownSpinner.getPreferredSize().height));
-		// Rows 2 & 3: same 3-column layout so Edit button matches first column width of countdown row
-		JPanel countdownEditPanel = new JPanel(new GridBagLayout());
-		GridBagConstraints ce = new GridBagConstraints();
-		ce.insets = new Insets(0, 0, 0, 0);
-		ce.anchor = GridBagConstraints.WEST;
-		ce.fill = GridBagConstraints.NONE;
-		ce.gridx = 0; ce.gridy = 0; ce.weightx = 0; countdownEditPanel.add(lblShutdownCountdown, ce);
-		ce.insets = new Insets(0, 8, 0, 0);
-		ce.gridx = 1; ce.weightx = 0; countdownEditPanel.add(shutdownCountdownSpinner, ce);
-		ce.insets = new Insets(0, 0, 0, 0);
-		ce.gridx = 2; ce.weightx = 1; ce.fill = GridBagConstraints.HORIZONTAL; countdownEditPanel.add(new JPanel(), ce);
-		// Spacer row so there is visible gap between countdown row and Edit button row (match other section row spacing = 2*pad)
-		JPanel spacerRow = new JPanel();
-		int rowGap = pad * 2;
-		spacerRow.setPreferredSize(new Dimension(0, rowGap));
-		spacerRow.setMinimumSize(new Dimension(0, rowGap));
-		ce.gridy = 1; ce.gridx = 0; ce.gridwidth = 3; ce.weightx = 1; ce.fill = GridBagConstraints.HORIZONTAL; countdownEditPanel.add(spacerRow, ce);
-		ce.gridwidth = 1;
-		ce.gridy = 2; ce.gridx = 0; ce.weightx = 0; ce.fill = GridBagConstraints.HORIZONTAL; countdownEditPanel.add(btnEditServerproperties, ce);
-		ce.gridx = 1; ce.weightx = 0; ce.fill = GridBagConstraints.NONE; countdownEditPanel.add(new JPanel(), ce);
-		ce.gridx = 2; ce.weightx = 1; ce.fill = GridBagConstraints.HORIZONTAL; countdownEditPanel.add(new JPanel(), ce);
-		rc.gridy = 1; rc.gridheight = 2; serverSection.add(countdownEditPanel, rc);
-		rc.gridheight = 1;
-		settingsContentInner.add(serverSection);
-
-		// Section: JVM / Run options - custom args/switches first, then min/max RAM (fixed-width spinners)
-		JPanel jvmSection = new JPanel();
-		jvmSection.setBorder(new TitledBorder(null, "JVM / Run options", TitledBorder.LEADING, TitledBorder.TOP));
-		jvmSection.setLayout(new GridBagLayout());
-		GridBagConstraints c = new GridBagConstraints();
-		c.insets = new Insets(pad, pad, pad, pad);
-		c.anchor = GridBagConstraints.WEST;
-		lblCustomArgs.setToolTipText("<html>Passed to the JVM as program arguments (e.g. <code>-Dproperty=value</code> for system properties).<br>These appear after the class/jar and before any application arguments. Use for JVM tuning and -D flags. Switches (above) are for launcher options.</html>");
-		customJvmArgsField.setToolTipText(lblCustomArgs.getToolTipText());
-		lblCustomSwitches.setToolTipText("<html>Passed to the java launcher as command-line switches (e.g. <code>-Xmx2G</code>, <code>-XX:+UseG1GC</code>).<br>These appear before the class/jar. Use for memory, GC, and other JVM options. Arguments (below) are for -D and app-level; switches are for launcher options.</html>");
-		customJvmSwitchesField.setToolTipText(lblCustomSwitches.getToolTipText());
-		JScrollPane argsScroll = new JScrollPane(customJvmArgsField);
-		argsScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-		argsScroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_NEVER);
-		argsScroll.setBorder(null);
-		customJvmArgsField.addMouseWheelListener(e -> {
-			Component p = customJvmArgsField.getParent();
-			if (p instanceof JViewport) {
-				JScrollPane sp = (JScrollPane) ((JViewport) p).getParent();
-				javax.swing.JScrollBar bar = sp.getHorizontalScrollBar();
-				if (bar != null && bar.isEnabled()) {
-					int step = e.getUnitsToScroll() * 24;
-					bar.setValue(Math.max(bar.getMinimum(), Math.min(bar.getMaximum() - bar.getVisibleAmount(), bar.getValue() + step)));
-				}
-			}
-		});
-		JScrollPane switchesScroll = new JScrollPane(customJvmSwitchesField);
-		switchesScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-		switchesScroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_NEVER);
-		switchesScroll.setBorder(null);
-		customJvmSwitchesField.addMouseWheelListener(e -> {
-			Component p = customJvmSwitchesField.getParent();
-			if (p instanceof JViewport) {
-				JScrollPane sp = (JScrollPane) ((JViewport) p).getParent();
-				javax.swing.JScrollBar bar = sp.getHorizontalScrollBar();
-				if (bar != null && bar.isEnabled()) {
-					int step = e.getUnitsToScroll() * 24;
-					bar.setValue(Math.max(bar.getMinimum(), Math.min(bar.getMaximum() - bar.getVisibleAmount(), bar.getValue() + step)));
-				}
-			}
-		});
-		c.fill = GridBagConstraints.HORIZONTAL;
-		c.gridx = 0; c.gridy = 0; c.weightx = 0; jvmSection.add(lblCustomSwitches, c);
-		c.gridx = 1; c.gridwidth = 2; c.weightx = 1; jvmSection.add(switchesScroll, c);
-		c.gridwidth = 1;
-		c.gridy = 1; c.gridx = 0; c.weightx = 0; jvmSection.add(lblCustomArgs, c);
-		c.gridx = 1; c.gridwidth = 2; c.weightx = 1; jvmSection.add(argsScroll, c);
-		c.gridwidth = 1;
-		int spinnerW = 90;
-		minRam.setPreferredSize(new Dimension(spinnerW, minRam.getPreferredSize().height));
-		maxRam.setPreferredSize(new Dimension(spinnerW, maxRam.getPreferredSize().height));
-		lblMinRam.setToolTipText("Minimum heap size in MB allocated to the server JVM.");
-		minRam.setToolTipText(lblMinRam.getToolTipText());
-		lblMaxRam.setToolTipText("Maximum heap size in MB allocated to the server JVM.");
-		maxRam.setToolTipText(lblMaxRam.getToolTipText());
-		c.fill = GridBagConstraints.NONE;
-		c.gridy = 2; c.gridx = 0; c.weightx = 0; jvmSection.add(lblMinRam, c);
-		c.gridx = 1; c.weightx = 0; jvmSection.add(minRam, c);
-		c.gridx = 2; c.weightx = 1; c.fill = GridBagConstraints.HORIZONTAL; jvmSection.add(new JPanel(), c);
-		c.fill = GridBagConstraints.NONE;
-		c.gridy = 3; c.gridx = 0; c.weightx = 0; jvmSection.add(lblMaxRam, c);
-		c.gridx = 1; c.weightx = 0; jvmSection.add(maxRam, c);
-		c.gridx = 2; c.weightx = 1; c.fill = GridBagConstraints.HORIZONTAL; jvmSection.add(new JPanel(), c);
-		c.gridwidth = 1;
-		customJvmArgsField.setMinimumSize(new Dimension(60, 20));
-		customJvmSwitchesField.setMinimumSize(new Dimension(60, 20));
-		settingsContentInner.add(jvmSection);
-
-		// Section: Files (full width like other sections; checkbox left-aligned)
-		JPanel filesSection = new JPanel();
-		filesSection.setBorder(new TitledBorder(null, "Files", TitledBorder.LEADING, TitledBorder.TOP));
-		filesSection.setLayout(new GridBagLayout());
-		c = new GridBagConstraints();
-		c.insets = new Insets(pad, pad, pad, pad);
-		c.anchor = GridBagConstraints.WEST;
-		c.fill = GridBagConstraints.NONE;
-		c.gridx = 0; c.gridy = 0; c.weightx = 0; filesSection.add(openFilesInSystemDefaultCheckBox, c);
-		c.gridx = 1; c.weightx = 1; c.fill = GridBagConstraints.HORIZONTAL; filesSection.add(new JPanel(), c);
-		settingsContentInner.add(filesSection);
-
-		// Section: Appearance (theme, file editor theme, console font size, console options)
-		JPanel appearanceSection = new JPanel();
-		appearanceSection.setBorder(new TitledBorder(null, "Appearance", TitledBorder.LEADING, TitledBorder.TOP));
-		appearanceSection.setLayout(new GridBagLayout());
-		c = new GridBagConstraints();
-		c.insets = new Insets(pad, pad, pad, pad);
-		c.anchor = GridBagConstraints.WEST;
-		c.fill = GridBagConstraints.HORIZONTAL;
-		lblTheme.setToolTipText("Look and feel for the application. May require an application restart to take effect.");
-		themeBox.setToolTipText(lblTheme.getToolTipText());
-		c.gridx = 0; c.gridy = 0; c.weightx = 0; c.gridwidth = 1; appearanceSection.add(lblTheme, c);
-		c.gridx = 1; c.weightx = 1; appearanceSection.add(themeBox, c);
-		JLabel lblAccentColor = new JLabel("Theme accent color");
-		lblAccentColor.setVerticalAlignment(SwingConstants.CENTER);
-		lblAccentColor.setToolTipText("<html>Accent color used for: highlighted buttons and controls in themes, the<br>Restart button icon, and focus indicators. Some themes use their own colors.</html>");
-		// Wrapper opts out of baseline so GridBagLayout centers this row by anchor instead of aligning text baselines
-		JPanel lblAccentWrap = new JPanel(new BorderLayout(0, 0)) {
-			@Override public int getBaseline(int w, int h) { return -1; }
-			@Override public java.awt.Component.BaselineResizeBehavior getBaselineResizeBehavior() { return java.awt.Component.BaselineResizeBehavior.OTHER; }
-		};
-		lblAccentWrap.add(lblAccentColor, BorderLayout.CENTER);
-		accentColorPanel = new AccentColorPanel(settings.getAccentColorRgb());
-		accentColorPanel.setToolTipText(lblAccentColor.getToolTipText());
-		accentColorPanel.setBorder(new EmptyBorder(0, 0, 0, 0));
-		accentThemeControlledLabel = new JLabel("(theme controlled)");
-		accentThemeControlledLabel.setVerticalAlignment(SwingConstants.CENTER);
-		accentThemeControlledLabel.setForeground(Color.GRAY);
-		accentThemeControlledLabel.setToolTipText("The selected theme uses its own colors; accent is not fully applied to the theme (some icons and controls may still use the accent color).");
-		accentColorPanel.setAccentChangeListener(() -> applyAccentColorLive());
-		// Accent row opts out of baseline so the whole row is centered vertically
-		JPanel accentRow = new JPanel() {
-			@Override public int getBaseline(int w, int h) { return -1; }
-			@Override public java.awt.Component.BaselineResizeBehavior getBaselineResizeBehavior() { return java.awt.Component.BaselineResizeBehavior.OTHER; }
-		};
-		accentRow.setLayout(new BoxLayout(accentRow, BoxLayout.LINE_AXIS));
-		int swatchH = accentColorPanel.getPreferredSize().height;
-		// Lock text containers and row to exact swatch panel height so vertical alignment has a defined box
-		lblAccentWrap.setPreferredSize(new Dimension(lblAccentColor.getPreferredSize().width, swatchH));
-		lblAccentWrap.setMinimumSize(new Dimension(0, swatchH));
-		lblAccentWrap.setMaximumSize(new Dimension(Integer.MAX_VALUE, swatchH));
-		accentRow.setMinimumSize(new Dimension(0, swatchH));
-		accentRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, swatchH));
-		accentColorPanel.setAlignmentY(Component.CENTER_ALIGNMENT);
-		accentRow.add(accentColorPanel);
-		accentRow.add(Box.createHorizontalStrut(8));
-		JPanel themeControlledWrap = new JPanel(new BorderLayout(0, 0)) {
-			@Override public int getBaseline(int w, int h) { return -1; }
-			@Override public java.awt.Component.BaselineResizeBehavior getBaselineResizeBehavior() { return java.awt.Component.BaselineResizeBehavior.OTHER; }
-		};
-		themeControlledWrap.setPreferredSize(new Dimension(120, swatchH));
-		themeControlledWrap.setMinimumSize(new Dimension(0, swatchH));
-		themeControlledWrap.setMaximumSize(new Dimension(Integer.MAX_VALUE, swatchH));
-		themeControlledWrap.setAlignmentY(Component.CENTER_ALIGNMENT);
-		themeControlledWrap.add(accentThemeControlledLabel, BorderLayout.CENTER);
-		accentRow.add(themeControlledWrap);
-		c.gridy = 1; c.gridx = 0; c.weightx = 0; c.anchor = GridBagConstraints.CENTER;
-		appearanceSection.add(lblAccentWrap, c);
-		c.anchor = GridBagConstraints.WEST;
-		GridBagConstraints cAccent = (GridBagConstraints) c.clone();
-		cAccent.gridx = 1; cAccent.weightx = 1; cAccent.fill = GridBagConstraints.HORIZONTAL;
-		cAccent.anchor = GridBagConstraints.CENTER;
-		cAccent.insets = new Insets(pad, pad, pad, pad);
-		appearanceSection.add(accentRow, cAccent);
-		updateAccentPanelForTheme(settings.getTheme());
-		JLabel lblFileEditorTheme = new JLabel("File editor theme");
-		lblFileEditorTheme.setToolTipText("Syntax highlighting theme used in the built-in file editor.");
-		fileEditorThemeBox = new JComboBox<>(new String[] { "default", "default-alt", "dark", "druid", "eclipse", "idea", "monokai", "vs" });
-		fileEditorThemeBox.setSelectedItem(settings.getFileEditorTheme());
-		fileEditorThemeBox.setToolTipText(lblFileEditorTheme.getToolTipText());
-		fileEditorThemeBox.addActionListener(e -> me.justicepro.spigotgui.FileExplorer.FileEditor.setDefaultThemeName(getFileEditorThemeFromBox()));
-		c.gridy = 2; c.gridx = 0; c.weightx = 0; appearanceSection.add(lblFileEditorTheme, c);
-		c.gridx = 1; c.weightx = 1; appearanceSection.add(fileEditorThemeBox, c);
-		lblFontSize.setToolTipText("Font size (in points) for the console text.");
-		fontSpinner.setPreferredSize(new Dimension(90, fontSpinner.getPreferredSize().height));
-		fontSpinner.setToolTipText(lblFontSize.getToolTipText());
-		c.gridy = 3; c.gridx = 0; c.weightx = 0; c.fill = GridBagConstraints.NONE; appearanceSection.add(lblFontSize, c);
-		c.gridx = 1; c.weightx = 0; c.fill = GridBagConstraints.NONE; appearanceSection.add(fontSpinner, c);
-		c.gridx = 2; c.weightx = 1; c.fill = GridBagConstraints.HORIZONTAL; appearanceSection.add(new JPanel(), c);
-		c.fill = GridBagConstraints.HORIZONTAL;
-		c.gridy = 4; c.gridx = 0; c.gridwidth = 2; appearanceSection.add(consoleDarkModeCheckBox, c);
-		c.gridwidth = 1;
-		c.gridy = 5; c.gridx = 0; c.gridwidth = 2; appearanceSection.add(disableConsoleColorsCheckBox, c);
-		c.gridy = 6; c.gridx = 0; c.gridwidth = 2; appearanceSection.add(consoleWrapWordBreakOnlyCheckBox, c);
-		manualConsoleScrollStickyCheckBox = new JCheckBox("Manual console scroll sticky");
-		manualConsoleScrollStickyCheckBox.setToolTipText("<html>When checked, a \"Console scroll sticky\" checkbox appears on the Console tab.<br>You control whether the console auto-scrolls to the bottom by toggling that checkbox.<br>When unchecked, sticky is automatic: scroll to bottom to stick, scroll up to unstick.</html>");
-		manualConsoleScrollStickyCheckBox.setSelected(settings.isManualConsoleScrollSticky());
-		manualConsoleScrollStickyCheckBox.addActionListener(e -> {
-			manualConsoleScrollStickyMode = manualConsoleScrollStickyCheckBox.isSelected();
-			if (chkConsoleScrollSticky != null) {
-				chkConsoleScrollSticky.setVisible(manualConsoleScrollStickyMode);
-				chkConsoleScrollSticky.setEnabled(manualConsoleScrollStickyMode);
-				if (manualConsoleScrollStickyMode) chkConsoleScrollSticky.setSelected(consoleStickToBottom);
-			}
-		});
-		c.gridy = 7; c.gridx = 0; c.gridwidth = 2; appearanceSection.add(manualConsoleScrollStickyCheckBox, c);
-		serverButtonsUseTextCheckBox = new JCheckBox("Use text for server control buttons");
-		serverButtonsUseTextCheckBox.setToolTipText("When checked, Start/Stop/Restart show text. When unchecked, they show only icons (play, stop, refresh) with tooltips.");
-		serverButtonsUseTextCheckBox.setSelected(settings.isServerButtonsUseText());
-		serverButtonsUseTextCheckBox.addActionListener(e -> applyServerButtonStyle(!serverButtonsUseTextCheckBox.isSelected()));
-		c.gridy = 8; c.gridx = 0; c.gridwidth = 2; appearanceSection.add(serverButtonsUseTextCheckBox, c);
-		minRam.setMinimumSize(new Dimension(50, minRam.getPreferredSize().height));
-		maxRam.setMinimumSize(new Dimension(50, maxRam.getPreferredSize().height));
-		fontSpinner.setMinimumSize(new Dimension(50, fontSpinner.getPreferredSize().height));
-		themeBox.setMinimumSize(new Dimension(80, themeBox.getPreferredSize().height));
-		fileEditorThemeBox.setMinimumSize(new Dimension(80, fileEditorThemeBox.getPreferredSize().height));
-		settingsContentInner.add(appearanceSection);
-		me.justicepro.spigotgui.FileExplorer.FileEditor.setDefaultThemeName(settings.getFileEditorTheme());
-
-		// Wrap in Scrollable panel so content does not stretch vertically when window is tall
-		JPanel settingsContent = new JPanel(new BorderLayout()) {
-			@Override
-			public java.awt.Dimension getPreferredSize() {
-				return settingsContentInner.getPreferredSize();
-			}
-		};
-		settingsContent.add(settingsContentInner, BorderLayout.NORTH);
-
-		JScrollPane settingsScroll = new JScrollPane(settingsContent);
-		settingsScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
-		settingsScroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
-		settingsScroll.getVerticalScrollBar().setUnitIncrement(24);
-		settingsScroll.setBorder(new EmptyBorder(0, 0, 0, 0));
-		panel_2.setLayout(new BorderLayout());
-		panel_2.add(settingsScroll, BorderLayout.CENTER);
-
-		JPanel panel_3 = new JPanel();
-		tabbedPane.addTab("Files", null, panel_3, null);
-
-		JScrollPane scrollPane_2 = new JScrollPane();
-
-		File jarDir = getDefaultDirectory();
-
-		JList<String> fileList = new JList<String>();
-		fileModel = new FileModel(fileList);
-		fileModel.setParentFrame(this);
-		fileModel.setOpenInSystemDefault(settings.isOpenFilesInSystemDefault());
-		fileList.setModel(fileModel);
-		fileList.setCellRenderer(new DefaultListCellRenderer() {
-			@Override
-			public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
-				super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
-				// Hover highlight (like Windows Explorer) when not selected
-				if (!isSelected && index == fileListHoverIndex) {
-					java.awt.Color bg = getBackground();
-					setBackground(bg != null ? bg.darker() : java.awt.Color.LIGHT_GRAY);
-				}
-				String s = value == null ? "" : value.toString();
-				Icon dirIcon = UIManager.getIcon("FileView.directoryIcon");
-				Icon fileIcon = UIManager.getIcon("FileView.fileIcon");
-				if ("..".equals(s)) {
-					setIcon(dirIcon != null ? dirIcon : UIManager.getIcon("FileView.upFolderIcon"));
-					setText(".. (up one level)");
-				} else if (s.startsWith("/")) {
-					setIcon(dirIcon);
-					setText(s.substring(1));
-				} else {
-					setIcon(fileIcon);
-					setText(s);
-				}
-				return this;
-			}
-		});
-		java.awt.event.MouseMotionListener motionListener = new java.awt.event.MouseMotionAdapter() {
-			@Override
-			public void mouseMoved(MouseEvent e) {
-				int i = fileList.locationToIndex(e.getPoint());
-				if (i != fileListHoverIndex) {
-					fileListHoverIndex = i;
-					fileList.repaint();
-				}
-			}
-		};
-		fileList.addMouseMotionListener(motionListener);
-		fileList.addMouseListener(new MouseAdapter() {
-			@Override
-			public void mouseExited(MouseEvent e) {
-				if (fileListHoverIndex != -1) {
-					fileListHoverIndex = -1;
-					fileList.repaint();
-				}
-			}
-		});
-
-		fileList.addMouseListener(fileModel.createMouseListener());
-		fileList.addKeyListener(fileModel.createKeyListener());
-		fileModel.loadDirectory(jarDir);
-
-		scrollPane_2.setViewportView(fileList);
-
-		JPopupMenu filesContextMenu = new JPopupMenu();
-		JMenuItem mnuOpen = new JMenuItem("Open");
-		mnuOpen.addActionListener(e -> fileModel.onFileRun());
-		filesContextMenu.add(mnuOpen);
-		filesContextMenu.addSeparator();
-		JMenuItem mnuCut = new JMenuItem("Cut");
-		mnuCut.addActionListener(e -> { if (fileModel.getSelectedFile() != null) fileModel.setClipboard(fileModel.getSelectedFile(), true); });
-		filesContextMenu.add(mnuCut);
-		JMenuItem mnuCopy = new JMenuItem("Copy");
-		mnuCopy.addActionListener(e -> { if (fileModel.getSelectedFile() != null) fileModel.setClipboard(fileModel.getSelectedFile(), false); });
-		filesContextMenu.add(mnuCopy);
-		JMenuItem mnuPaste = new JMenuItem("Paste");
-		mnuPaste.addActionListener(e -> fileModel.pasteFromClipboard());
-		filesContextMenu.add(mnuPaste);
-		filesContextMenu.addSeparator();
-		JMenuItem mnuDelete = new JMenuItem("Delete");
-		mnuDelete.addActionListener(e -> {
-			File sel = fileModel.getSelectedFile();
-			if (sel != null && JOptionPane.showConfirmDialog(SpigotGUI.this, "Delete \"" + sel.getName() + "\"?", "Confirm Delete", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION)
-				fileModel.deleteSelected();
-		});
-		filesContextMenu.add(mnuDelete);
-		JMenuItem mnuRename = new JMenuItem("Rename");
-		mnuRename.addActionListener(e -> {
-			File sel = fileModel.getSelectedFile();
-			if (sel != null) {
-				String name = JOptionPane.showInputDialog(SpigotGUI.this, "New name:", sel.getName());
-				if (name != null) fileModel.renameSelected(name);
-			}
-		});
-		filesContextMenu.add(mnuRename);
-		filesContextMenu.addPopupMenuListener(new PopupMenuListener() {
-			@Override public void popupMenuCanceled(PopupMenuEvent e) {}
-			@Override public void popupMenuWillBecomeInvisible(PopupMenuEvent e) {}
-			@Override public void popupMenuWillBecomeVisible(PopupMenuEvent e) {
-				boolean hasSel = fileModel.getSelectedFile() != null;
-				mnuOpen.setEnabled(hasSel);
-				mnuCut.setEnabled(hasSel);
-				mnuCopy.setEnabled(hasSel);
-				mnuDelete.setEnabled(hasSel);
-				mnuRename.setEnabled(hasSel);
-				mnuPaste.setEnabled(FileModel.getClipboardFile() != null);
-			}
-		});
-		// Right-click: select row under cursor then show context menu
-		fileList.addMouseListener(new MouseAdapter() {
-			@Override
-			public void mousePressed(MouseEvent e) {
-				if (e.isPopupTrigger()) {
-					int i = fileList.locationToIndex(e.getPoint());
-					if (i >= 0) {
-						fileList.setSelectedIndex(i);
-						fileList.requestFocusInWindow();
-					}
-					filesContextMenu.show(e.getComponent(), e.getX(), e.getY());
-				}
-			}
-			@Override
-			public void mouseReleased(MouseEvent e) {
-				if (e.isPopupTrigger()) {
-					int i = fileList.locationToIndex(e.getPoint());
-					if (i >= 0) {
-						fileList.setSelectedIndex(i);
-						fileList.requestFocusInWindow();
-					}
-					filesContextMenu.show(e.getComponent(), e.getX(), e.getY());
-				}
-			}
-		});
-
-		JButton btnNew = new JButton("New...");
-		JPopupMenu newMenu = new JPopupMenu();
-		JMenuItem mnuNewFile = new JMenuItem("New file");
-		mnuNewFile.addActionListener(e -> {
-			String name = JOptionPane.showInputDialog(SpigotGUI.this, "File name:", "new file.txt");
-			if (name != null) fileModel.createNewFile(name);
-		});
-		newMenu.add(mnuNewFile);
-		JMenuItem mnuNewFolder = new JMenuItem("New folder");
-		mnuNewFolder.addActionListener(e -> {
-			String name = JOptionPane.showInputDialog(SpigotGUI.this, "Folder name:", "new folder");
-			if (name != null) fileModel.createNewFolder(name);
-		});
-		newMenu.add(mnuNewFolder);
-		btnNew.addActionListener(e -> newMenu.show(btnNew, 0, btnNew.getHeight()));
-
-		JButton btnFileEditor = new JButton("File Editor");
-		btnFileEditor.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent arg0) {
-				FileEditor editor = new FileEditor();
-				editor.setLocationRelativeTo(SpigotGUI.this);
-				editor.setVisible(true);
-			}
-		});
-		GroupLayout gl_panel_3 = new GroupLayout(panel_3);
-		gl_panel_3.setHorizontalGroup(
-				gl_panel_3.createParallelGroup(Alignment.LEADING)
-				.addComponent(scrollPane_2, GroupLayout.DEFAULT_SIZE, 747, Short.MAX_VALUE)
-				.addGroup(gl_panel_3.createSequentialGroup()
-						.addComponent(btnNew)
-						.addPreferredGap(ComponentPlacement.RELATED, GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-						.addComponent(btnFileEditor, GroupLayout.PREFERRED_SIZE, 86, GroupLayout.PREFERRED_SIZE)
-						.addContainerGap())
-				);
-		gl_panel_3.setVerticalGroup(
-				gl_panel_3.createParallelGroup(Alignment.LEADING)
-				.addGroup(gl_panel_3.createSequentialGroup()
-						.addGap(6)
-						.addGroup(gl_panel_3.createParallelGroup(Alignment.BASELINE)
-								.addComponent(btnNew)
-								.addComponent(btnFileEditor))
-						.addPreferredGap(ComponentPlacement.RELATED)
-						.addComponent(scrollPane_2, GroupLayout.DEFAULT_SIZE, 599, Short.MAX_VALUE))
-				);
-		panel_3.setLayout(gl_panel_3);
-
-		JPanel panel_4 = new JPanel();
-		tabbedPane.addTab("Module List", null, panel_4, null);
-
-		JScrollPane scrollPane_3 = new JScrollPane();
-
-		JList<String> moduleList = new JList<String>();
-		DefaultListModel<String> moduleListModel = new DefaultListModel<>();
-
-		moduleList.setModel(moduleListModel);
-
-		for (Module module : ModuleManager.modules) {
-			moduleListModel.addElement(module.getName());
-		}
-
-		scrollPane_3.setViewportView(moduleList);
-
-		JPopupMenu popupMenu_1 = new JPopupMenu();
-		popupMenu_1.addPopupMenuListener(new PopupMenuListener() {
-			public void popupMenuCanceled(PopupMenuEvent e) {
-
-			}
-
-			public void popupMenuWillBecomeInvisible(PopupMenuEvent e) {
-
-			}
-
-			public void popupMenuWillBecomeVisible(PopupMenuEvent e) {
-				popupMenu_1.removeAll();
-
-				if (moduleList.getSelectedIndex() != -1) {
-
-					JMenuItem mntmModuleName = new JMenuItem(moduleList.getSelectedValue());
-					popupMenu_1.add(mntmModuleName);
-
-					JMenuItem menuItem_2 = new JMenuItem(" ");
-					popupMenu_1.add(menuItem_2);
-					System.out.println(moduleList.getSelectedValue());
-					Module module = ModuleManager.getModule(moduleList.getSelectedValue());
-
-					if (module != null) {
-
-						if (module.getMenuItems() != null) {
-
-							for (JMenuItem item : module.getMenuItems()) {
-								popupMenu_1.add(item);
-							}
-
-						}else {
-							JMenuItem noModuleMenuItem = new JMenuItem("No Module Items");
-							popupMenu_1.add(noModuleMenuItem);
-						}
-
-					}
-
-				}
-
-			}
-		});
-		addPopup(moduleList, popupMenu_1);
-		GroupLayout gl_panel_4 = new GroupLayout(panel_4);
-		gl_panel_4.setHorizontalGroup(
-				gl_panel_4.createParallelGroup(Alignment.LEADING)
-				.addComponent(scrollPane_3, Alignment.TRAILING, GroupLayout.DEFAULT_SIZE, 747, Short.MAX_VALUE)
-				);
-		gl_panel_4.setVerticalGroup(
-				gl_panel_4.createParallelGroup(Alignment.LEADING)
-				.addComponent(scrollPane_3, Alignment.TRAILING, GroupLayout.DEFAULT_SIZE, 630, Short.MAX_VALUE)
-				);
-		panel_4.setLayout(gl_panel_4);
-
-		JPanel panel_6 = new JPanel();
-		tabbedPane.addTab("Remote Admin", null, panel_6, null);
-
-		JButton btnConnectToServer = new JButton("Connect to Server");
-		btnConnectToServer.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent arg0) {
-				LoginWindow login = new LoginWindow();
-				login.setVisible(true);
-
-			}
-		});
-
-		JButton btnCreateServer = new JButton("Host Server");
-		btnCreateServer.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				ServerWindow serverWindow = new ServerWindow();
-				serverWindow.setVisible(true);
-			}
-		});
-		GroupLayout gl_panel_6 = new GroupLayout(panel_6);
-		gl_panel_6.setHorizontalGroup(
-				gl_panel_6.createParallelGroup(Alignment.LEADING)
-				.addGroup(gl_panel_6.createSequentialGroup()
-						.addComponent(btnConnectToServer, GroupLayout.PREFERRED_SIZE, 301, GroupLayout.PREFERRED_SIZE)
-						.addPreferredGap(ComponentPlacement.RELATED, 145, Short.MAX_VALUE)
-						.addComponent(btnCreateServer, GroupLayout.PREFERRED_SIZE, 301, GroupLayout.PREFERRED_SIZE))
-				);
-		gl_panel_6.setVerticalGroup(
-				gl_panel_6.createParallelGroup(Alignment.LEADING)
-				.addGroup(Alignment.TRAILING, gl_panel_6.createSequentialGroup()
-						.addContainerGap(535, Short.MAX_VALUE)
-						.addGroup(gl_panel_6.createParallelGroup(Alignment.BASELINE)
-								.addComponent(btnConnectToServer, GroupLayout.PREFERRED_SIZE, 95, GroupLayout.PREFERRED_SIZE)
-								.addComponent(btnCreateServer, GroupLayout.PREFERRED_SIZE, 95, GroupLayout.PREFERRED_SIZE)))
-				);
-		panel_6.setLayout(gl_panel_6);
-
-		tabbedPane.addTab("Settings", null, panel_2, null);
-
-		JPanel panel_5 = new JPanel();
-		tabbedPane.addTab("About/Help", null, panel_5, null);
-
-		JButton btnHelp = new JButton("Help");
-		btnHelp.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				try {
-					InstructionWindow window = new InstructionWindow();
-					window.setLocationRelativeTo(SpigotGUI.this);
-					window.setVisible(true);
-				} catch (Exception e1) {
-					e1.printStackTrace();
-				}
-			}
-		});
-
-		JLabel lblCreatedByJusticepro = new JLabel("By JusticePro, Ymerejliaf");
-
-		GroupLayout gl_panel_5 = new GroupLayout(panel_5);
-		gl_panel_5.setHorizontalGroup(
-			gl_panel_5.createParallelGroup(Alignment.LEADING)
-				.addGroup(gl_panel_5.createSequentialGroup()
-					.addContainerGap()
-					.addComponent(btnHelp, GroupLayout.PREFERRED_SIZE, 109, GroupLayout.PREFERRED_SIZE)
-					.addContainerGap(GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-				.addGroup(gl_panel_5.createSequentialGroup()
-					.addContainerGap()
-					.addComponent(lblCreatedByJusticepro)
-					.addContainerGap(GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-		);
-		gl_panel_5.setVerticalGroup(
-			gl_panel_5.createSequentialGroup()
-				.addContainerGap()
-				.addComponent(btnHelp)
-				.addPreferredGap(ComponentPlacement.UNRELATED)
-				.addComponent(lblCreatedByJusticepro)
-				.addContainerGap(GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-		);
-		panel_5.setLayout(gl_panel_5);
+		tabbedPane.addTab("About/Help", null, new AboutPanel(this), null);
 
 		for (Module module : ModuleManager.modules) {
 
@@ -1860,8 +629,7 @@ public class SpigotGUI extends JFrame {
 	}
 
 	public void startServer() throws IOException {
-		startServer("nogui " + customJvmArgsField.getText(), Server.makeMemory(minRam.getValue() + "M", maxRam.getValue() + "M") + " " + customJvmSwitchesField.getText());
-
+		startServer("nogui " + settingsPanel.getCustomJvmArgsField().getText(), Server.makeMemory(settingsPanel.getMinRam().getValue() + "M", settingsPanel.getMaxRam().getValue() + "M") + " " + settingsPanel.getCustomJvmSwitchesField().getText());
 	}
 
 	public void startServer(String args, String switches) throws IOException {
@@ -2044,7 +812,7 @@ public class SpigotGUI extends JFrame {
 	}
 
 	/** Show icons (when useIcons true) or text (when false) on Start/Stop/Restart. Restart icon uses accent color. */
-	private void applyServerButtonStyle(boolean useIcons) {
+	void applyServerButtonStyle(boolean useIcons) {
 		if (btnStartServer == null) return;
 		int size = 18;
 		Color enabledFg = UIManager.getColor("Button.foreground");
@@ -2091,13 +859,10 @@ public class SpigotGUI extends JFrame {
 		}
 	}
 
-	/** Current shutdown/restart countdown in seconds (from Settings tab spinner if built, else from settings). */
+	/** Current shutdown/restart countdown in seconds (from Settings panel or saved settings). */
 	private int getShutdownCountdownSeconds() {
-		if (shutdownCountdownSpinner != null) {
-			Object v = shutdownCountdownSpinner.getValue();
-			if (v instanceof Number) return Math.max(0, ((Number) v).intValue());
-		}
-		return 0;
+		if (settingsPanel != null) return settingsPanel.getShutdownCountdownSeconds();
+		return settings != null ? settings.getShutdownCountdownSeconds() : 0;
 	}
 
 	/** Runs countdown then stops (and sets restart flag if isRestart). Called from EDT. */
@@ -2225,21 +990,41 @@ public class SpigotGUI extends JFrame {
 	}
 
 	/** Updates the debug checkbox to match {@link #consoleStickToBottom} (call on EDT). */
-	private void updateScrollStickyDebugCheckbox() {
+	void updateScrollStickyDebugCheckbox() {
 		if (chkConsoleScrollSticky != null) {
 			chkConsoleScrollSticky.setSelected(consoleStickToBottom);
 		}
 	}
 
-	/** If the given point in the text pane is over a link (http/https), returns the URL; otherwise null. */
-	@SuppressWarnings("deprecation")
-	private static String getLinkUrlAt(JTextPane textPane, Point p) {
-		int offs = textPane.viewToModel(p);
-		if (offs < 0) return null;
-		StyledDocument doc = (StyledDocument) textPane.getDocument();
-		javax.swing.text.Element el = doc.getCharacterElement(offs);
-		Object url = el.getAttributes().getAttribute(ConsoleStyleHelper.LINK_URL);
-		return (url instanceof String) ? (String) url : null;
+	// --- Callbacks for ConsolePanel ---
+	void sendConsoleCommand(String text, boolean asSay) {
+		if (server == null || !server.isRunning()) return;
+		try {
+			server.sendCommand(asSay ? "say " + text : text);
+		} catch (ProcessException e) {
+			e.printStackTrace();
+		}
+	}
+	void scheduleScrollAfterCommand() {
+		Timer t = new Timer(150, e -> {
+			scrollingFromCommand = true;
+			ignoreScrollBarUntil = System.currentTimeMillis() + 250;
+			scrollConsoleToBottomOnly();
+			SwingUtilities.invokeLater(() -> scrollingFromCommand = false);
+		});
+		t.setRepeats(false);
+		t.start();
+	}
+	void setConsoleStickToBottom(boolean stick) {
+		consoleStickToBottom = stick;
+	}
+	void notifyConsoleScrollBarAdjustment(AdjustmentEvent e) {
+		updateConsoleStickToBottomFromScrollBar(e);
+	}
+
+	/** Send a command to the server via the Core module. Used by Players panel and others. */
+	public void sendCommand(String command) throws ProcessException {
+		if (module != null) module.sendCommand(command);
 	}
 
 	/** Returns a Unicode-friendly monospace font for the console. */
@@ -2255,7 +1040,7 @@ public class SpigotGUI extends JFrame {
 	}
 
 	/** Default directory for file browser and choosers; works when run from IDE or from JAR. */
-	private static File getDefaultDirectory() {
+	public File getDefaultDirectory() {
 		java.net.URL url = ClassLoader.getSystemClassLoader().getResource(".");
 		if (url != null) {
 			return new File(url.getPath().replaceAll("%20", " "));
@@ -2263,8 +1048,14 @@ public class SpigotGUI extends JFrame {
 		return new File(System.getProperty("user.dir", "."));
 	}
 
+	public File getJarFile() { return jarFile; }
+	public void setJarFile(File file) { jarFile = file; }
+
+	/** Theme at startup; used by Settings panel to decide if theme can be applied without restart. */
+	public Theme getInitialThemeForSession() { return initialThemeForSession; }
+
 	/** Updates the theme label to (may require restart) or (restart required) in red; keeps label at fixed size so layout never shifts. */
-	private void updateThemeLabelFor(Theme selectedTheme) {
+	public void updateThemeLabelFor(Theme selectedTheme, JLabel lblTheme) {
 		if (lblTheme == null) return;
 		boolean sameFamily = initialThemeForSession != null && initialThemeForSession.getFamily() == selectedTheme.getFamily();
 		if (sameFamily) {
@@ -2285,30 +1076,22 @@ public class SpigotGUI extends JFrame {
 				themeLabelHeight = lblTheme.getPreferredSize().height;
 			}
 		}
-		// Always apply fixed size so the label never changes size and the settings page doesn't shift
 		lblTheme.setPreferredSize(new Dimension(themeLabelWidth, themeLabelHeight));
 		lblTheme.setMinimumSize(new Dimension(themeLabelWidth, themeLabelHeight));
 	}
 
-	private String getFileEditorThemeFromBox() {
-		Object sel = fileEditorThemeBox != null ? fileEditorThemeBox.getSelectedItem() : null;
-		return (sel != null && sel.toString().length() > 0) ? sel.toString() : "default";
-	}
-
-	/** Accent color from Settings tab (accent color selector); falls back to settings if UI not built yet. */
+	/** Accent color from Settings tab; falls back to settings if UI not built yet. */
 	private int getAccentColorRgbFromUI() {
-		if (accentColorPanel != null && accentColorPanel.getSelectedRgb() != 0)
-			return accentColorPanel.getSelectedRgb();
+		if (settingsPanel != null) return settingsPanel.getAccentColorRgbFromUI();
 		return settings != null ? settings.getAccentColorRgb() : 0x0096E6;
 	}
 
 	/** Apply current accent color from UI to FlatLaf and restart icon without restart. */
-	private void applyAccentColorLive() {
+	void applyAccentColorLive() {
 		int rgb = getAccentColorRgbFromUI();
 		String hex = String.format("#%06X", 0xFFFFFF & rgb);
 		FlatLaf.setGlobalExtraDefaults(Collections.singletonMap("@accentColor", hex));
 		UIManager.put("@accentColor", hex);
-		// Re-set the same LookAndFeel so it re-reads @accentColor (FlatLaf caches it at install time)
 		try {
 			javax.swing.LookAndFeel current = UIManager.getLookAndFeel();
 			if (current != null) {
@@ -2320,34 +1103,45 @@ public class SpigotGUI extends JFrame {
 		} catch (Throwable t) {
 			FlatLaf.updateUI();
 		}
-		boolean useIcons = (serverButtonsUseTextCheckBox != null) ? !serverButtonsUseTextCheckBox.isSelected() : (settings != null && !settings.isServerButtonsUseText());
+		boolean useIcons = (settingsPanel != null && settingsPanel.getServerButtonsUseTextCheckBox() != null)
+			? !settingsPanel.getServerButtonsUseTextCheckBox().isSelected()
+			: (settings != null && !settings.isServerButtonsUseText());
 		applyServerButtonStyle(useIcons);
 	}
 
 	/** Enable/disable accent panel and show "(theme controlled)" when theme does not honor accent. */
-	private void updateAccentPanelForTheme(Theme theme) {
-		if (accentColorPanel == null || accentThemeControlledLabel == null) return;
-		boolean honors = theme != null && theme.honorsAccentColor();
-		accentColorPanel.setEnabled(honors);
-		accentThemeControlledLabel.setVisible(!honors);
+	void updateAccentPanelForTheme(Theme theme) {
+		if (settingsPanel != null) settingsPanel.updateAccentPanelForTheme(theme);
 	}
 
-	private static void addPopup(Component component, final JPopupMenu popup) {
-		component.addMouseListener(new MouseAdapter() {
-			public void mousePressed(MouseEvent e) {
-				if (e.isPopupTrigger()) {
-					showMenu(e);
-				}
-			}
-			public void mouseReleased(MouseEvent e) {
-				if (e.isPopupTrigger()) {
-					showMenu(e);
-				}
-			}
-			private void showMenu(MouseEvent e) {
-				popup.show(e.getComponent(), e.getX(), e.getY());
-			}
-		});
+	// --- Callbacks for SettingsPanel ---
+	void onConsoleFontSizeChanged(int size) {
+		Font newFont = getConsoleMonospaceFont(size);
+		if (consoleTextPane != null) consoleTextPane.setFont(newFont);
+		if (consoleStyleHelper != null) consoleStyleHelper.setBaseFont(newFont);
+	}
+	void onConsoleDarkModeChanged(boolean dark) {
+		if (consoleStyleHelper != null) consoleStyleHelper.setDarkMode(dark);
+	}
+	void onConsoleColorsEnabledChanged(boolean enabled) {
+		if (consoleStyleHelper != null) consoleStyleHelper.setColorsEnabled(enabled);
+	}
+	void onConsoleWrapWordBreakOnlyChanged(boolean wordBreakOnly) {
+		if (consoleTextPane != null) {
+			consoleTextPane.revalidate();
+			consoleTextPane.repaint();
+		}
+	}
+	void onOpenFilesInSystemDefaultChanged(boolean openInSystemDefault) {
+		if (fileModel != null) fileModel.setOpenInSystemDefault(openInSystemDefault);
+	}
+	void onManualConsoleScrollStickyChanged(boolean manualMode) {
+		manualConsoleScrollStickyMode = manualMode;
+		if (chkConsoleScrollSticky != null) {
+			chkConsoleScrollSticky.setVisible(manualMode);
+			chkConsoleScrollSticky.setEnabled(manualMode);
+			if (manualMode) chkConsoleScrollSticky.setSelected(consoleStickToBottom);
+		}
 	}
 
 	class ModuleCore extends Module implements ActionListener {
@@ -2462,93 +1256,5 @@ public class SpigotGUI extends JFrame {
 			return false;
 		}
 		return server.isRunning();
-	}
-
-	/** Panel that paints a green (online) or red (offline) circle for server status. */
-	private static final class StatusCirclePanel extends JPanel {
-		private boolean online = false;
-
-		void setOnline(boolean online) {
-			if (this.online != online) {
-				this.online = online;
-				repaint();
-			}
-		}
-
-		@Override
-		protected void paintComponent(Graphics g) {
-			super.paintComponent(g);
-			Graphics2D g2 = (Graphics2D) g.create();
-			g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-			int w = getWidth();
-			int h = getHeight();
-			int d = (int) (Math.min(w, h) * 0.6);
-			if (d < 4) d = 4;
-			int x = (w - d) / 2;
-			int y = (h - d) / 2;
-			g2.setColor(online ? new Color(0, 180, 0) : new Color(200, 0, 0));
-			g2.fill(new Ellipse2D.Float(x, y, d, d));
-			g2.setColor(online ? new Color(0, 220, 0) : new Color(255, 80, 80));
-			g2.draw(new Ellipse2D.Float(x, y, d, d));
-			g2.dispose();
-		}
-	}
-
-	/** 
-	 * Panel with preset accent color swatches. Uses colors that are visible on both light and dark backgrounds. 
-	 * Calls accentChangeListener when selection changes. 
-	 **/
-	private static final class AccentColorPanel extends JPanel {
-		private static final int[] PRESET_RGB = {
-			0x0096E6, 0xE63946, 0x7B2CBF, 0xF77F00, 0x2A9D8F, 0x6C757D
-		};
-		private static final int SWATCH_SIZE = 22;
-		private int selectedRgb;
-		private Runnable accentChangeListener;
-
-		AccentColorPanel(int initialRgb) {
-			selectedRgb = initialRgb != 0 ? initialRgb : 0x0096E6;
-			setLayout(new FlowLayout(FlowLayout.LEFT, 4, 0));
-			setPreferredSize(new Dimension((SWATCH_SIZE * PRESET_RGB.length) + (4 * (PRESET_RGB.length - 1)) + 5, SWATCH_SIZE + 8));
-			for (final int rgb : PRESET_RGB) {
-				JPanel swatch = new JPanel() {
-					@Override
-					protected void paintComponent(Graphics g) {
-						super.paintComponent(g);
-						Graphics2D g2 = (Graphics2D) g.create();
-						g2.setColor(new Color(rgb));
-						g2.fillRect(1, 1, getWidth() - 2, getHeight() - 2);
-						if (selectedRgb == rgb) {
-							Color bg = getParent() != null ? getParent().getBackground() : getBackground();
-							float lum = bg != null ? (0.299f * bg.getRed() + 0.587f * bg.getGreen() + 0.114f * bg.getBlue()) / 255f : 0.5f;
-							g2.setColor(lum < 0.5f ? Color.LIGHT_GRAY : Color.DARK_GRAY);
-							g2.setStroke(new java.awt.BasicStroke(2f));
-							g2.drawRect(1, 1, getWidth() - 2, getHeight() - 2);
-						}
-						g2.dispose();
-					}
-				};
-				swatch.setPreferredSize(new Dimension(SWATCH_SIZE, SWATCH_SIZE));
-				swatch.setBackground(getBackground());
-				swatch.setCursor(new Cursor(Cursor.HAND_CURSOR));
-				swatch.addMouseListener(new MouseAdapter() {
-					@Override
-					public void mouseClicked(MouseEvent e) {
-						selectedRgb = rgb;
-						AccentColorPanel.this.repaint();
-						if (accentChangeListener != null) accentChangeListener.run();
-					}
-				});
-				add(swatch);
-			}
-		}
-
-		void setAccentChangeListener(Runnable listener) {
-			this.accentChangeListener = listener;
-		}
-
-		int getSelectedRgb() {
-			return selectedRgb;
-		}
 	}
 }
