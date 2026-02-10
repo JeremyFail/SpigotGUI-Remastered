@@ -3,8 +3,6 @@ package me.justicepro.spigotgui.FileExplorer;
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
 import java.awt.GridLayout;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.io.File;
@@ -93,6 +91,7 @@ public class FileEditor extends JFrame {
 
 		undoManager = new RUndoManager(textArea);
 		textArea.getDocument().addUndoableEditListener(undoManager);
+		undoManager.discardAllEdits();
 		textArea.getDocument().addDocumentListener(new DocumentListener() {
 			@Override
 			public void insertUpdate(DocumentEvent e) { dirty = true; }
@@ -227,6 +226,7 @@ public class FileEditor extends JFrame {
 		newFile = true;
 		openedFile = null;
 		textArea.setText("");
+		undoManager.discardAllEdits();
 		textArea.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_NONE);
 		dirty = false;
 		setTitle("New - File Editor");
@@ -340,6 +340,7 @@ public class FileEditor extends JFrame {
 		newFile = false;
 		openedFile = file;
 		textArea.setText(new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8));
+		undoManager.discardAllEdits();
 		setSyntaxStyleFromFile(file);
 		dirty = false;
 		setTitle(file.getName() + " - File Editor");
