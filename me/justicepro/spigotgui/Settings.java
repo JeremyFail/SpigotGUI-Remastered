@@ -6,7 +6,7 @@ import java.io.Serializable;
 
 public class Settings implements Serializable {
 
-	/** Pin UID so old settings files (without consoleDarkMode) still deserialize. */
+	/** Pin UID so old settings files still deserialize. */
 	private static final long serialVersionUID = -2270671006336242076L;
 
 	private ServerSettings serverSettings;
@@ -28,6 +28,8 @@ public class Settings implements Serializable {
 	private int shutdownCountdownSeconds = 0;
 	/** When true, console text wraps only at word boundaries (spaces); when false (default), wraps at any character. */
 	private boolean consoleWrapWordBreakOnly = false;
+	/** Accent color (RGB, e.g. 0x0096E6). Used by FlatLaf and for icon tint (e.g. refresh). Default blue. */
+	private int accentColorRgb = 0x0096E6;
 
 	public Settings(ServerSettings serverSettings, Theme theme, Object fontSize) {
 		this.serverSettings = serverSettings;
@@ -76,6 +78,10 @@ public class Settings implements Serializable {
 	}
 
 	public Settings(ServerSettings serverSettings, Theme theme, Object fontSize, boolean consoleDarkMode, boolean consoleColorsEnabled, boolean openFilesInSystemDefault, String fileEditorTheme, boolean manualConsoleScrollSticky, boolean serverButtonsUseText, int shutdownCountdownSeconds, boolean consoleWrapWordBreakOnly) {
+		this(serverSettings, theme, fontSize, consoleDarkMode, consoleColorsEnabled, openFilesInSystemDefault, fileEditorTheme, manualConsoleScrollSticky, serverButtonsUseText, shutdownCountdownSeconds, consoleWrapWordBreakOnly, 0x0096E6);
+	}
+
+	public Settings(ServerSettings serverSettings, Theme theme, Object fontSize, boolean consoleDarkMode, boolean consoleColorsEnabled, boolean openFilesInSystemDefault, String fileEditorTheme, boolean manualConsoleScrollSticky, boolean serverButtonsUseText, int shutdownCountdownSeconds, boolean consoleWrapWordBreakOnly, int accentColorRgb) {
 		this.serverSettings = serverSettings;
 		this.theme = theme;
 		this.fontSize = fontSize;
@@ -87,6 +93,7 @@ public class Settings implements Serializable {
 		this.serverButtonsUseText = serverButtonsUseText;
 		this.shutdownCountdownSeconds = Math.max(0, shutdownCountdownSeconds);
 		this.consoleWrapWordBreakOnly = consoleWrapWordBreakOnly;
+		this.accentColorRgb = accentColorRgb != 0 ? accentColorRgb : 0x0096E6;
 	}
 
 	public ServerSettings getServerSettings() {
@@ -169,9 +176,18 @@ public class Settings implements Serializable {
 		this.consoleWrapWordBreakOnly = consoleWrapWordBreakOnly;
 	}
 
-	/** Backward compatibility: old settings files have no shutdownCountdownSeconds (default 0). Normalize after deserialize. */
+	public int getAccentColorRgb() {
+		return accentColorRgb != 0 ? accentColorRgb : 0x0096E6;
+	}
+
+	public void setAccentColorRgb(int accentColorRgb) {
+		this.accentColorRgb = accentColorRgb != 0 ? accentColorRgb : 0x0096E6;
+	}
+
+	/** Backward compatibility: Normalize after deserialization for old settings files that are missing some fields. */
 	private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
 		in.defaultReadObject();
 		if (shutdownCountdownSeconds < 0) shutdownCountdownSeconds = 0;
+		if (accentColorRgb == 0) accentColorRgb = 0x0096E6;
 	}
 }

@@ -90,6 +90,8 @@ import javax.swing.text.DefaultCaret;
 import javax.swing.text.StyledDocument;
 import javax.swing.tree.DefaultMutableTreeNode;
 
+import com.formdev.flatlaf.FlatLaf;
+import com.formdev.flatlaf.extras.FlatSVGIcon;
 import me.justicepro.spigotgui.JModulePanel;
 import me.justicepro.spigotgui.Module;
 import me.justicepro.spigotgui.ModuleManager;
@@ -181,6 +183,12 @@ public class SpigotGUI extends JFrame {
 	private JCheckBox consoleWrapWordBreakOnlyCheckBox;
 	private JCheckBox openFilesInSystemDefaultCheckBox;
 	private JComboBox<String> fileEditorThemeBox;
+	/** Panel with accent color swatches for FlatLaf; used by getAccentColorRgbFromUI(). */
+	private AccentColorPanel accentColorPanel;
+	/** Shown when selected theme does not honor accent color (e.g. IntelliJ pack themes). */
+	private JLabel accentThemeControlledLabel;
+	/** Current settings (theme, accent, etc.); set in constructor. */
+	private Settings settings;
 	private FileModel fileModel;
 	/** Hovered index in the Files tab list for highlight; -1 when none. */
 	private int fileListHoverIndex = -1;
@@ -210,8 +218,31 @@ public class SpigotGUI extends JFrame {
 			public void run() {
 				try {
 					Settings settings = loadSettings();
-					UIManager.setLookAndFeel(settings.getTheme().getLookAndFeel());
-
+					Theme theme = Theme.resolveForCurrentPlatform(settings.getTheme());
+					// Apply accent color before LaF so FlatLaf uses it (setGlobalExtraDefaults is required)
+					String accentHex = String.format("#%06X", 0xFFFFFF & settings.getAccentColorRgb());
+					FlatLaf.setGlobalExtraDefaults(Collections.singletonMap("@accentColor", accentHex));
+					UIManager.put("@accentColor", accentHex);
+					try {
+						UIManager.setLookAndFeel(theme.getLookAndFeel());
+					} catch (Throwable t) {
+						theme = Theme.getFallbackTheme();
+						UIManager.setLookAndFeel(theme.getLookAndFeel());
+						if (theme != settings.getTheme()) {
+							settings = new Settings(settings.getServerSettings(), theme, settings.getFontSize(),
+									settings.isConsoleDarkMode(), settings.isConsoleColorsEnabled(), settings.isOpenFilesInSystemDefault(),
+									settings.getFileEditorTheme(), settings.isManualConsoleScrollSticky(), settings.isServerButtonsUseText(),
+									settings.getShutdownCountdownSeconds(), settings.isConsoleWrapWordBreakOnly(), settings.getAccentColorRgb());
+							try { saveSettings(settings); } catch (IOException e) { }
+						}
+					}
+					if (theme != settings.getTheme()) {
+						settings = new Settings(settings.getServerSettings(), theme, settings.getFontSize(),
+								settings.isConsoleDarkMode(), settings.isConsoleColorsEnabled(), settings.isOpenFilesInSystemDefault(),
+								settings.getFileEditorTheme(), settings.isManualConsoleScrollSticky(), settings.isServerButtonsUseText(),
+								settings.getShutdownCountdownSeconds(), settings.isConsoleWrapWordBreakOnly(), settings.getAccentColorRgb());
+						try { saveSettings(settings); } catch (IOException e) { }
+					}
 					instance = new SpigotGUI(settings);
 					instance.setVisible(true);
 				} catch (Exception e) {
@@ -232,6 +263,7 @@ public class SpigotGUI extends JFrame {
 	 * @throws InstantiationException 
 	 */
 	public SpigotGUI(Settings settings) throws IOException, ClassNotFoundException, InstantiationException, IllegalAccessException, UnsupportedLookAndFeelException {
+		this.settings = settings;
 		ServerSettings serverSettings = settings.getServerSettings();
 		if (serverSettings.getJarFile() != null) {
 			jarFile = serverSettings.getJarFile();
@@ -265,7 +297,7 @@ public class SpigotGUI extends JFrame {
 
 				String theme = themeBox.getItemAt(themeBox.getSelectedIndex());
 				
-				Settings s = new Settings(new ServerSettings(minRam.getValue(), maxRam.getValue(), customJvmArgsField.getText(), customJvmSwitchesField.getText(), jarFile), settings.getTheme(), fontSpinner.getValue(), consoleDarkModeCheckBox.isSelected(), !disableConsoleColorsCheckBox.isSelected(), openFilesInSystemDefaultCheckBox.isSelected(), getFileEditorThemeFromBox(), manualConsoleScrollStickyCheckBox != null && manualConsoleScrollStickyCheckBox.isSelected(), serverButtonsUseTextCheckBox != null && serverButtonsUseTextCheckBox.isSelected(), getShutdownCountdownSeconds(), consoleWrapWordBreakOnlyCheckBox != null ? consoleWrapWordBreakOnlyCheckBox.isSelected() : settings.isConsoleWrapWordBreakOnly());
+				Settings s = new Settings(new ServerSettings(minRam.getValue(), maxRam.getValue(), customJvmArgsField.getText(), customJvmSwitchesField.getText(), jarFile), settings.getTheme(), fontSpinner.getValue(), consoleDarkModeCheckBox.isSelected(), !disableConsoleColorsCheckBox.isSelected(), openFilesInSystemDefaultCheckBox.isSelected(), getFileEditorThemeFromBox(), manualConsoleScrollStickyCheckBox != null && manualConsoleScrollStickyCheckBox.isSelected(), serverButtonsUseTextCheckBox != null && serverButtonsUseTextCheckBox.isSelected(), getShutdownCountdownSeconds(), consoleWrapWordBreakOnlyCheckBox != null ? consoleWrapWordBreakOnlyCheckBox.isSelected() : settings.isConsoleWrapWordBreakOnly(), getAccentColorRgbFromUI());
 				
 				for (Theme t : Theme.values()) {
 
@@ -452,7 +484,7 @@ public class SpigotGUI extends JFrame {
 		try {
 			serverIP = Inet4Address.getLocalHost().getHostAddress();
 		} catch (Exception e) {
-			serverIP = "—";
+			serverIP = "Unknown";
 		}
 		JLabel lblServerIP = new JLabel("Server IP: " + serverIP);
 		lblServerIP.setToolTipText("Local address for this machine. Players can use this to connect (e.g. for LAN).");
@@ -926,14 +958,18 @@ public class SpigotGUI extends JFrame {
 
 		lblTheme = new JLabel("Theme (may require restart)");
 		themeBox = new JComboBox<String>();
-		themeBox.setModel(new DefaultComboBoxModel<>(new String[] {"Aluminium", "Aero", "Acryl", "Bernstein", "Fast", "Graphite", "HiFi", "Luna", "McWin", "Metal", "Mint", "Motif", "Noire", "Smart", "Texture", "Windows"}));
+		String[] availableThemeNames = new String[Theme.getAvailableThemes().length];
+		int i = 0;
+		for (Theme t : Theme.getAvailableThemes()) availableThemeNames[i++] = t.getName();
+		themeBox.setModel(new DefaultComboBoxModel<>(availableThemeNames));
 		themeBox.setSelectedItem(settings.getTheme().getName());
 		updateThemeLabelFor(settings.getTheme());
 		themeBox.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent arg0) {
 				String themeName = themeBox.getSelectedItem() + "";
 				if (themeName.isEmpty()) return;
-				Theme theme = Theme.valueOf(themeName.replaceAll(" ", "_"));
+				Theme theme = Theme.fromDisplayName(themeName);
+				if (theme == null) return;
 				boolean sameFamily = (initialThemeForSession != null && initialThemeForSession.getFamily() == theme.getFamily());
 				if (sameFamily) {
 					try {
@@ -945,6 +981,7 @@ public class SpigotGUI extends JFrame {
 					}
 				}
 				updateThemeLabelFor(theme);
+				updateAccentPanelForTheme(theme);
 			}
 		});
 
@@ -1028,7 +1065,7 @@ public class SpigotGUI extends JFrame {
 		settingsContentInner.setLayout(new BoxLayout(settingsContentInner, BoxLayout.Y_AXIS));
 		settingsContentInner.setBorder(new EmptyBorder(10, 10, 10, 10));
 
-		// Section: Server — each row has its own layout (columns do not align across rows)
+		// Section: Server - each row has its own layout (columns do not align across rows)
 		JPanel serverSection = new JPanel();
 		serverSection.setBorder(new TitledBorder(null, "Server", TitledBorder.LEADING, TitledBorder.TOP));
 		serverSection.setLayout(new GridBagLayout());
@@ -1046,6 +1083,7 @@ public class SpigotGUI extends JFrame {
 		row1.add(btnSetJarFile, BorderLayout.EAST);
 		rc.gridx = 0; rc.gridy = 0; serverSection.add(row1, rc);
 		JLabel lblShutdownCountdown = new JLabel("Shutdown/restart countdown (seconds)");
+		lblShutdownCountdown.setMinimumSize(new Dimension(lblShutdownCountdown.getFontMetrics(lblShutdownCountdown.getFont()).stringWidth("Shutdown/restart countdown (seconds)") + 8, lblShutdownCountdown.getPreferredSize().height));
 		lblShutdownCountdown.setToolTipText("When you click Stop or Restart, wait this many seconds before actually stopping (announces in chat). 0 = immediate.");
 		shutdownCountdownSpinner = new JSpinner(new SpinnerNumberModel(Math.max(0, settings.getShutdownCountdownSeconds()), 0, 86400, 1));
 		shutdownCountdownSpinner.setToolTipText(lblShutdownCountdown.getToolTipText());
@@ -1075,16 +1113,16 @@ public class SpigotGUI extends JFrame {
 		rc.gridheight = 1;
 		settingsContentInner.add(serverSection);
 
-		// Section: JVM / Run options — custom args/switches first, then min/max RAM (fixed-width spinners)
+		// Section: JVM / Run options - custom args/switches first, then min/max RAM (fixed-width spinners)
 		JPanel jvmSection = new JPanel();
 		jvmSection.setBorder(new TitledBorder(null, "JVM / Run options", TitledBorder.LEADING, TitledBorder.TOP));
 		jvmSection.setLayout(new GridBagLayout());
 		GridBagConstraints c = new GridBagConstraints();
 		c.insets = new Insets(pad, pad, pad, pad);
 		c.anchor = GridBagConstraints.WEST;
-		lblCustomArgs.setToolTipText("<html><b>Custom arguments</b> — Passed to the JVM as program arguments (e.g. <code>-Dproperty=value</code> for system properties).<br>These appear after the class/jar and before any application arguments. Use for JVM tuning and -D flags. Switches (above) are for launcher options.</html>");
+		lblCustomArgs.setToolTipText("<html>Passed to the JVM as program arguments (e.g. <code>-Dproperty=value</code> for system properties).<br>These appear after the class/jar and before any application arguments. Use for JVM tuning and -D flags. Switches (above) are for launcher options.</html>");
 		customJvmArgsField.setToolTipText(lblCustomArgs.getToolTipText());
-		lblCustomSwitches.setToolTipText("<html><b>Custom switches</b> — Passed to the java launcher as command-line switches (e.g. <code>-Xmx2G</code>, <code>-XX:+UseG1GC</code>).<br>These appear before the class/jar. Use for memory, GC, and other JVM options. Arguments (below) are for -D and app-level; switches are for launcher options.</html>");
+		lblCustomSwitches.setToolTipText("<html>Passed to the java launcher as command-line switches (e.g. <code>-Xmx2G</code>, <code>-XX:+UseG1GC</code>).<br>These appear before the class/jar. Use for memory, GC, and other JVM options. Arguments (below) are for -D and app-level; switches are for launcher options.</html>");
 		customJvmSwitchesField.setToolTipText(lblCustomSwitches.getToolTipText());
 		JScrollPane argsScroll = new JScrollPane(customJvmArgsField);
 		argsScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
@@ -1167,25 +1205,77 @@ public class SpigotGUI extends JFrame {
 		themeBox.setToolTipText(lblTheme.getToolTipText());
 		c.gridx = 0; c.gridy = 0; c.weightx = 0; c.gridwidth = 1; appearanceSection.add(lblTheme, c);
 		c.gridx = 1; c.weightx = 1; appearanceSection.add(themeBox, c);
+		JLabel lblAccentColor = new JLabel("Theme accent color");
+		lblAccentColor.setVerticalAlignment(SwingConstants.CENTER);
+		lblAccentColor.setToolTipText("<html>Accent color used for: highlighted buttons and controls in themes, the<br>Restart button icon, and focus indicators. Some themes use their own colors.</html>");
+		// Wrapper opts out of baseline so GridBagLayout centers this row by anchor instead of aligning text baselines
+		JPanel lblAccentWrap = new JPanel(new BorderLayout(0, 0)) {
+			@Override public int getBaseline(int w, int h) { return -1; }
+			@Override public java.awt.Component.BaselineResizeBehavior getBaselineResizeBehavior() { return java.awt.Component.BaselineResizeBehavior.OTHER; }
+		};
+		lblAccentWrap.add(lblAccentColor, BorderLayout.CENTER);
+		accentColorPanel = new AccentColorPanel(settings.getAccentColorRgb());
+		accentColorPanel.setToolTipText(lblAccentColor.getToolTipText());
+		accentColorPanel.setBorder(new EmptyBorder(0, 0, 0, 0));
+		accentThemeControlledLabel = new JLabel("(theme controlled)");
+		accentThemeControlledLabel.setVerticalAlignment(SwingConstants.CENTER);
+		accentThemeControlledLabel.setForeground(Color.GRAY);
+		accentThemeControlledLabel.setToolTipText("The selected theme uses its own colors; accent is not fully applied to the theme (some icons and controls may still use the accent color).");
+		accentColorPanel.setAccentChangeListener(() -> applyAccentColorLive());
+		// Accent row opts out of baseline so the whole row is centered vertically
+		JPanel accentRow = new JPanel() {
+			@Override public int getBaseline(int w, int h) { return -1; }
+			@Override public java.awt.Component.BaselineResizeBehavior getBaselineResizeBehavior() { return java.awt.Component.BaselineResizeBehavior.OTHER; }
+		};
+		accentRow.setLayout(new BoxLayout(accentRow, BoxLayout.LINE_AXIS));
+		int swatchH = accentColorPanel.getPreferredSize().height;
+		// Lock text containers and row to exact swatch panel height so vertical alignment has a defined box
+		lblAccentWrap.setPreferredSize(new Dimension(lblAccentColor.getPreferredSize().width, swatchH));
+		lblAccentWrap.setMinimumSize(new Dimension(0, swatchH));
+		lblAccentWrap.setMaximumSize(new Dimension(Integer.MAX_VALUE, swatchH));
+		accentRow.setMinimumSize(new Dimension(0, swatchH));
+		accentRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, swatchH));
+		accentColorPanel.setAlignmentY(Component.CENTER_ALIGNMENT);
+		accentRow.add(accentColorPanel);
+		accentRow.add(Box.createHorizontalStrut(8));
+		JPanel themeControlledWrap = new JPanel(new BorderLayout(0, 0)) {
+			@Override public int getBaseline(int w, int h) { return -1; }
+			@Override public java.awt.Component.BaselineResizeBehavior getBaselineResizeBehavior() { return java.awt.Component.BaselineResizeBehavior.OTHER; }
+		};
+		themeControlledWrap.setPreferredSize(new Dimension(120, swatchH));
+		themeControlledWrap.setMinimumSize(new Dimension(0, swatchH));
+		themeControlledWrap.setMaximumSize(new Dimension(Integer.MAX_VALUE, swatchH));
+		themeControlledWrap.setAlignmentY(Component.CENTER_ALIGNMENT);
+		themeControlledWrap.add(accentThemeControlledLabel, BorderLayout.CENTER);
+		accentRow.add(themeControlledWrap);
+		c.gridy = 1; c.gridx = 0; c.weightx = 0; c.anchor = GridBagConstraints.CENTER;
+		appearanceSection.add(lblAccentWrap, c);
+		c.anchor = GridBagConstraints.WEST;
+		GridBagConstraints cAccent = (GridBagConstraints) c.clone();
+		cAccent.gridx = 1; cAccent.weightx = 1; cAccent.fill = GridBagConstraints.HORIZONTAL;
+		cAccent.anchor = GridBagConstraints.CENTER;
+		cAccent.insets = new Insets(pad, pad, pad, pad);
+		appearanceSection.add(accentRow, cAccent);
+		updateAccentPanelForTheme(settings.getTheme());
 		JLabel lblFileEditorTheme = new JLabel("File editor theme");
 		lblFileEditorTheme.setToolTipText("Syntax highlighting theme used in the built-in file editor.");
 		fileEditorThemeBox = new JComboBox<>(new String[] { "default", "default-alt", "dark", "druid", "eclipse", "idea", "monokai", "vs" });
 		fileEditorThemeBox.setSelectedItem(settings.getFileEditorTheme());
 		fileEditorThemeBox.setToolTipText(lblFileEditorTheme.getToolTipText());
 		fileEditorThemeBox.addActionListener(e -> me.justicepro.spigotgui.FileExplorer.FileEditor.setDefaultThemeName(getFileEditorThemeFromBox()));
-		c.gridy = 1; c.gridx = 0; c.weightx = 0; appearanceSection.add(lblFileEditorTheme, c);
+		c.gridy = 2; c.gridx = 0; c.weightx = 0; appearanceSection.add(lblFileEditorTheme, c);
 		c.gridx = 1; c.weightx = 1; appearanceSection.add(fileEditorThemeBox, c);
 		lblFontSize.setToolTipText("Font size (in points) for the console text.");
 		fontSpinner.setPreferredSize(new Dimension(90, fontSpinner.getPreferredSize().height));
 		fontSpinner.setToolTipText(lblFontSize.getToolTipText());
-		c.gridy = 2; c.gridx = 0; c.weightx = 0; c.fill = GridBagConstraints.NONE; appearanceSection.add(lblFontSize, c);
+		c.gridy = 3; c.gridx = 0; c.weightx = 0; c.fill = GridBagConstraints.NONE; appearanceSection.add(lblFontSize, c);
 		c.gridx = 1; c.weightx = 0; c.fill = GridBagConstraints.NONE; appearanceSection.add(fontSpinner, c);
 		c.gridx = 2; c.weightx = 1; c.fill = GridBagConstraints.HORIZONTAL; appearanceSection.add(new JPanel(), c);
 		c.fill = GridBagConstraints.HORIZONTAL;
-		c.gridy = 3; c.gridx = 0; c.gridwidth = 2; appearanceSection.add(consoleDarkModeCheckBox, c);
+		c.gridy = 4; c.gridx = 0; c.gridwidth = 2; appearanceSection.add(consoleDarkModeCheckBox, c);
 		c.gridwidth = 1;
-		c.gridy = 4; c.gridx = 0; c.gridwidth = 2; appearanceSection.add(disableConsoleColorsCheckBox, c);
-		c.gridy = 5; c.gridx = 0; c.gridwidth = 2; appearanceSection.add(consoleWrapWordBreakOnlyCheckBox, c);
+		c.gridy = 5; c.gridx = 0; c.gridwidth = 2; appearanceSection.add(disableConsoleColorsCheckBox, c);
+		c.gridy = 6; c.gridx = 0; c.gridwidth = 2; appearanceSection.add(consoleWrapWordBreakOnlyCheckBox, c);
 		manualConsoleScrollStickyCheckBox = new JCheckBox("Manual console scroll sticky");
 		manualConsoleScrollStickyCheckBox.setToolTipText("<html>When checked, a \"Console scroll sticky\" checkbox appears on the Console tab.<br>You control whether the console auto-scrolls to the bottom by toggling that checkbox.<br>When unchecked, sticky is automatic: scroll to bottom to stick, scroll up to unstick.</html>");
 		manualConsoleScrollStickyCheckBox.setSelected(settings.isManualConsoleScrollSticky());
@@ -1197,12 +1287,12 @@ public class SpigotGUI extends JFrame {
 				if (manualConsoleScrollStickyMode) chkConsoleScrollSticky.setSelected(consoleStickToBottom);
 			}
 		});
-		c.gridy = 6; c.gridx = 0; c.gridwidth = 2; appearanceSection.add(manualConsoleScrollStickyCheckBox, c);
+		c.gridy = 7; c.gridx = 0; c.gridwidth = 2; appearanceSection.add(manualConsoleScrollStickyCheckBox, c);
 		serverButtonsUseTextCheckBox = new JCheckBox("Use text for server control buttons");
 		serverButtonsUseTextCheckBox.setToolTipText("When checked, Start/Stop/Restart show text. When unchecked, they show only icons (play, stop, refresh) with tooltips.");
 		serverButtonsUseTextCheckBox.setSelected(settings.isServerButtonsUseText());
 		serverButtonsUseTextCheckBox.addActionListener(e -> applyServerButtonStyle(!serverButtonsUseTextCheckBox.isSelected()));
-		c.gridy = 7; c.gridx = 0; c.gridwidth = 2; appearanceSection.add(serverButtonsUseTextCheckBox, c);
+		c.gridy = 8; c.gridx = 0; c.gridwidth = 2; appearanceSection.add(serverButtonsUseTextCheckBox, c);
 		minRam.setMinimumSize(new Dimension(50, minRam.getPreferredSize().height));
 		maxRam.setMinimumSize(new Dimension(50, maxRam.getPreferredSize().height));
 		fontSpinner.setMinimumSize(new Dimension(50, fontSpinner.getPreferredSize().height));
@@ -1534,7 +1624,6 @@ public class SpigotGUI extends JFrame {
 		});
 
 		JLabel lblCreatedByJusticepro = new JLabel("By JusticePro, Ymerejliaf");
-		JLabel lblThemesByJtatoo = new JLabel("Themes by JTatoo");
 
 		GroupLayout gl_panel_5 = new GroupLayout(panel_5);
 		gl_panel_5.setHorizontalGroup(
@@ -1547,10 +1636,6 @@ public class SpigotGUI extends JFrame {
 					.addContainerGap()
 					.addComponent(lblCreatedByJusticepro)
 					.addContainerGap(GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-				.addGroup(gl_panel_5.createSequentialGroup()
-					.addContainerGap()
-					.addComponent(lblThemesByJtatoo)
-					.addContainerGap(GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
 		);
 		gl_panel_5.setVerticalGroup(
 			gl_panel_5.createSequentialGroup()
@@ -1558,8 +1643,6 @@ public class SpigotGUI extends JFrame {
 				.addComponent(btnHelp)
 				.addPreferredGap(ComponentPlacement.UNRELATED)
 				.addComponent(lblCreatedByJusticepro)
-				.addPreferredGap(ComponentPlacement.RELATED)
-				.addComponent(lblThemesByJtatoo)
 				.addContainerGap(GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
 		);
 		panel_5.setLayout(gl_panel_5);
@@ -1597,15 +1680,22 @@ public class SpigotGUI extends JFrame {
 		File backupFile = new File("spigotgui.settings.old");
 
 		if (!file.exists()) {
-			// No main file — try backup (e.g. from a previous failed load)
+			// No main file - try backup (e.g. from a previous failed load)
 			if (backupFile.exists()) {
 				Settings fromBackup = tryLoadSettingsFrom(backupFile);
 				if (fromBackup != null) {
+					Theme resolved = Theme.resolveForCurrentPlatform(fromBackup.getTheme());
+					if (resolved != fromBackup.getTheme()) {
+						fromBackup = new Settings(fromBackup.getServerSettings(), resolved, fromBackup.getFontSize(),
+								fromBackup.isConsoleDarkMode(), fromBackup.isConsoleColorsEnabled(), fromBackup.isOpenFilesInSystemDefault(),
+								fromBackup.getFileEditorTheme(), fromBackup.isManualConsoleScrollSticky(), fromBackup.isServerButtonsUseText(),
+								fromBackup.getShutdownCountdownSeconds(), fromBackup.isConsoleWrapWordBreakOnly(), fromBackup.getAccentColorRgb());
+					}
 					saveSettings(fromBackup); // migrate to new format on main file
 					return fromBackup;
 				}
 			}
-			Theme defaultTheme = System.getProperty("os.name", "").toLowerCase().contains("win") ? Theme.Windows : Theme.Graphite;
+			Theme defaultTheme = Theme.getDefaultForPlatform();
 			Settings defaults = new Settings(ServerSettings.getDefault(), defaultTheme, 13, false, true, false, "default");
 			saveSettings(defaults);
 			return defaults;
@@ -1614,21 +1704,36 @@ public class SpigotGUI extends JFrame {
 		// Try main file first
 		Settings settings = tryLoadSettingsFrom(file);
 		if (settings != null) {
+			Theme resolved = Theme.resolveForCurrentPlatform(settings.getTheme());
+			if (resolved != settings.getTheme()) {
+				settings = new Settings(settings.getServerSettings(), resolved, settings.getFontSize(),
+						settings.isConsoleDarkMode(), settings.isConsoleColorsEnabled(), settings.isOpenFilesInSystemDefault(),
+						settings.getFileEditorTheme(), settings.isManualConsoleScrollSticky(), settings.isServerButtonsUseText(),
+						settings.getShutdownCountdownSeconds(), settings.isConsoleWrapWordBreakOnly(), settings.getAccentColorRgb());
+				try { saveSettings(settings); } catch (IOException e) { /* persist fallback theme */ }
+			}
 			return settings;
 		}
 
-		// Main file failed (e.g. old/incompatible format) — try backup if it exists
+		// Main file failed (e.g. old/incompatible format) - try backup if it exists
 		if (backupFile.exists()) {
 			settings = tryLoadSettingsFrom(backupFile);
 			if (settings != null) {
-				saveSettings(settings); // migrate to new format
+				Theme resolved = Theme.resolveForCurrentPlatform(settings.getTheme());
+				if (resolved != settings.getTheme()) {
+					settings = new Settings(settings.getServerSettings(), resolved, settings.getFontSize(),
+							settings.isConsoleDarkMode(), settings.isConsoleColorsEnabled(), settings.isOpenFilesInSystemDefault(),
+							settings.getFileEditorTheme(), settings.isManualConsoleScrollSticky(), settings.isServerButtonsUseText(),
+							settings.getShutdownCountdownSeconds(), settings.isConsoleWrapWordBreakOnly(), settings.getAccentColorRgb());
+				}
+				saveSettings(settings); // migrate to new format on main file
 				return settings;
 			}
 		}
 
-		// Both failed — backup main file so we don't lose it, then use defaults
+		// Both failed - backup main file so we don't lose it, then use defaults
 		file.renameTo(backupFile);
-		Theme defaultTheme = System.getProperty("os.name", "").toLowerCase().contains("win") ? Theme.Windows : Theme.Graphite;
+		Theme defaultTheme = Theme.getDefaultForPlatform();
 		Settings defaults = new Settings(ServerSettings.getDefault(), defaultTheme, 13, false, true, false, "default");
 		saveSettings(defaults);
 		return defaults;
@@ -1897,7 +2002,7 @@ public class SpigotGUI extends JFrame {
 				int cx = x + size / 2, cy = y + size / 2;
 				int rad = size / 2 - 2;
 				if (rad < 4) rad = 4;
-				// Arc like Edge: starts upper-right (35°), runs CCW to top-right (315°) — gap at top
+				// Arc like Edge: starts upper-right (35°), runs CCW to top-right (315°) - gap at top
 				Arc2D arc = new Arc2D.Float(cx - rad, cy - rad, rad * 2, rad * 2, 35, 280, Arc2D.OPEN);
 				java.awt.Stroke old = g2.getStroke();
 				g2.setStroke(new java.awt.BasicStroke(2f));
@@ -1924,7 +2029,21 @@ public class SpigotGUI extends JFrame {
 		};
 	}
 
-	/** Show icons (when useIcons true) or text (when false) on Start/Stop/Restart. Use setDisabledIcon so disabled state shows gray. */
+	/** Load an SVG icon from classpath (e.g. /svg/refresh.svg); returns null if not available so caller can use programmatic fallback. */
+	private Icon createSvgOrFallbackIcon(String path, int width, int height, Color color) {
+		String resPath = path.startsWith("/") ? path.substring(1) : path;
+		try {
+			FlatSVGIcon icon = new FlatSVGIcon(resPath, width, height);
+			if (color != null) {
+				icon.setColorFilter(new FlatSVGIcon.ColorFilter(c -> color));
+			}
+			return icon;
+		} catch (Throwable t) {
+			return null;
+		}
+	}
+
+	/** Show icons (when useIcons true) or text (when false) on Start/Stop/Restart. Restart icon uses accent color. */
 	private void applyServerButtonStyle(boolean useIcons) {
 		if (btnStartServer == null) return;
 		int size = 18;
@@ -1932,18 +2051,29 @@ public class SpigotGUI extends JFrame {
 		if (enabledFg == null) enabledFg = Color.BLACK;
 		Color disabledFg = UIManager.getColor("Button.disabledText");
 		if (disabledFg == null) disabledFg = Color.GRAY;
+		Color accentColor = settings != null ? new Color(0xFFFFFF & settings.getAccentColorRgb()) : new Color(0x0096E6);
 		if (useIcons) {
+			// Play/Stop: no color filter so SVG keeps its green/red; Restart: use accent
+			Icon playIcon = createSvgOrFallbackIcon("/svg/execute.svg", size, size, null);
+			Icon playIconDis = playIcon != null ? createSvgOrFallbackIcon("/svg/execute.svg", size, size, null) : null;
+			Icon stopIcon = createSvgOrFallbackIcon("/svg/suspend.svg", size, size, null);
+			Icon stopIconDis = stopIcon != null ? createSvgOrFallbackIcon("/svg/suspend.svg", size, size, null) : null;
+			Icon restartIcon = createSvgOrFallbackIcon("/svg/refresh.svg", size, size, accentColor);
+			Icon restartIconDis = restartIcon != null ? createSvgOrFallbackIcon("/svg/refresh.svg", size, size, disabledFg) : null;
 			btnStartServer.setText("");
-			btnStartServer.setIcon(createPlayIcon(size, enabledFg));
-			btnStartServer.setDisabledIcon(createPlayIcon(size, disabledFg));
+			Icon playDisabled = (playIcon instanceof FlatSVGIcon) ? ((FlatSVGIcon) playIcon).getDisabledIcon() : playIconDis;
+			Icon stopDisabled = (stopIcon instanceof FlatSVGIcon) ? ((FlatSVGIcon) stopIcon).getDisabledIcon() : stopIconDis;
+			Icon restartDisabled = (restartIcon instanceof FlatSVGIcon) ? ((FlatSVGIcon) restartIcon).getDisabledIcon() : restartIconDis;
+			btnStartServer.setIcon(playIcon != null ? playIcon : createPlayIcon(size, enabledFg));
+			btnStartServer.setDisabledIcon(playIcon != null ? (playDisabled != null ? playDisabled : createPlayIcon(size, disabledFg)) : createPlayIcon(size, disabledFg));
 			btnStartServer.setToolTipText("Start Server");
 			btnStopServer.setText("");
-			btnStopServer.setIcon(createStopIcon(size, enabledFg));
-			btnStopServer.setDisabledIcon(createStopIcon(size, disabledFg));
+			btnStopServer.setIcon(stopIcon != null ? stopIcon : createStopIcon(size, enabledFg));
+			btnStopServer.setDisabledIcon(stopIcon != null ? (stopDisabled != null ? stopDisabled : createStopIcon(size, disabledFg)) : createStopIcon(size, disabledFg));
 			btnStopServer.setToolTipText("Stop Server");
 			btnRestartServer.setText("");
-			btnRestartServer.setIcon(createRestartIcon(size, enabledFg));
-			btnRestartServer.setDisabledIcon(createRestartIcon(size, disabledFg));
+			btnRestartServer.setIcon(restartIcon != null ? restartIcon : createRestartIcon(size, accentColor));
+			btnRestartServer.setDisabledIcon(restartIcon != null ? (restartDisabled != null ? restartDisabled : createRestartIcon(size, disabledFg)) : createRestartIcon(size, disabledFg));
 			btnRestartServer.setToolTipText("Restart Server");
 		} else {
 			btnStartServer.setIcon(null);
@@ -2165,6 +2295,43 @@ public class SpigotGUI extends JFrame {
 		return (sel != null && sel.toString().length() > 0) ? sel.toString() : "default";
 	}
 
+	/** Accent color from Settings tab (accent color selector); falls back to settings if UI not built yet. */
+	private int getAccentColorRgbFromUI() {
+		if (accentColorPanel != null && accentColorPanel.getSelectedRgb() != 0)
+			return accentColorPanel.getSelectedRgb();
+		return settings != null ? settings.getAccentColorRgb() : 0x0096E6;
+	}
+
+	/** Apply current accent color from UI to FlatLaf and restart icon without restart. */
+	private void applyAccentColorLive() {
+		int rgb = getAccentColorRgbFromUI();
+		String hex = String.format("#%06X", 0xFFFFFF & rgb);
+		FlatLaf.setGlobalExtraDefaults(Collections.singletonMap("@accentColor", hex));
+		UIManager.put("@accentColor", hex);
+		// Re-set the same LookAndFeel so it re-reads @accentColor (FlatLaf caches it at install time)
+		try {
+			javax.swing.LookAndFeel current = UIManager.getLookAndFeel();
+			if (current != null) {
+				UIManager.setLookAndFeel(current.getClass().getName());
+				SwingUtilities.updateComponentTreeUI(this);
+			} else {
+				FlatLaf.updateUI();
+			}
+		} catch (Throwable t) {
+			FlatLaf.updateUI();
+		}
+		boolean useIcons = (serverButtonsUseTextCheckBox != null) ? !serverButtonsUseTextCheckBox.isSelected() : (settings != null && !settings.isServerButtonsUseText());
+		applyServerButtonStyle(useIcons);
+	}
+
+	/** Enable/disable accent panel and show "(theme controlled)" when theme does not honor accent. */
+	private void updateAccentPanelForTheme(Theme theme) {
+		if (accentColorPanel == null || accentThemeControlledLabel == null) return;
+		boolean honors = theme != null && theme.honorsAccentColor();
+		accentColorPanel.setEnabled(honors);
+		accentThemeControlledLabel.setVisible(!honors);
+	}
+
 	private static void addPopup(Component component, final JPopupMenu popup) {
 		component.addMouseListener(new MouseAdapter() {
 			public void mousePressed(MouseEvent e) {
@@ -2324,6 +2491,64 @@ public class SpigotGUI extends JFrame {
 			g2.setColor(online ? new Color(0, 220, 0) : new Color(255, 80, 80));
 			g2.draw(new Ellipse2D.Float(x, y, d, d));
 			g2.dispose();
+		}
+	}
+
+	/** 
+	 * Panel with preset accent color swatches. Uses colors that are visible on both light and dark backgrounds. 
+	 * Calls accentChangeListener when selection changes. 
+	 **/
+	private static final class AccentColorPanel extends JPanel {
+		private static final int[] PRESET_RGB = {
+			0x0096E6, 0xE63946, 0x7B2CBF, 0xF77F00, 0x2A9D8F, 0x6C757D
+		};
+		private static final int SWATCH_SIZE = 22;
+		private int selectedRgb;
+		private Runnable accentChangeListener;
+
+		AccentColorPanel(int initialRgb) {
+			selectedRgb = initialRgb != 0 ? initialRgb : 0x0096E6;
+			setLayout(new FlowLayout(FlowLayout.LEFT, 4, 0));
+			setPreferredSize(new Dimension((SWATCH_SIZE * PRESET_RGB.length) + (4 * (PRESET_RGB.length - 1)) + 5, SWATCH_SIZE + 8));
+			for (final int rgb : PRESET_RGB) {
+				JPanel swatch = new JPanel() {
+					@Override
+					protected void paintComponent(Graphics g) {
+						super.paintComponent(g);
+						Graphics2D g2 = (Graphics2D) g.create();
+						g2.setColor(new Color(rgb));
+						g2.fillRect(1, 1, getWidth() - 2, getHeight() - 2);
+						if (selectedRgb == rgb) {
+							Color bg = getParent() != null ? getParent().getBackground() : getBackground();
+							float lum = bg != null ? (0.299f * bg.getRed() + 0.587f * bg.getGreen() + 0.114f * bg.getBlue()) / 255f : 0.5f;
+							g2.setColor(lum < 0.5f ? Color.LIGHT_GRAY : Color.DARK_GRAY);
+							g2.setStroke(new java.awt.BasicStroke(2f));
+							g2.drawRect(1, 1, getWidth() - 2, getHeight() - 2);
+						}
+						g2.dispose();
+					}
+				};
+				swatch.setPreferredSize(new Dimension(SWATCH_SIZE, SWATCH_SIZE));
+				swatch.setBackground(getBackground());
+				swatch.setCursor(new Cursor(Cursor.HAND_CURSOR));
+				swatch.addMouseListener(new MouseAdapter() {
+					@Override
+					public void mouseClicked(MouseEvent e) {
+						selectedRgb = rgb;
+						AccentColorPanel.this.repaint();
+						if (accentChangeListener != null) accentChangeListener.run();
+					}
+				});
+				add(swatch);
+			}
+		}
+
+		void setAccentChangeListener(Runnable listener) {
+			this.accentChangeListener = listener;
+		}
+
+		int getSelectedRgb() {
+			return selectedRgb;
 		}
 	}
 }

@@ -38,14 +38,14 @@ public final class ConsoleStyleHelper {
 
     private static final Pattern URL_PATTERN = Pattern.compile("https?://[^\\s<>\"']+");
 
-    /** Default text color for light background — black so it's readable on white */
+    /** Default text color for light background - black so it's readable on white */
     private static final Color DEFAULT_FG_LIGHT = Color.BLACK;
     /** Default text color for dark background */
     private static final Color DEFAULT_FG_DARK = new Color(0xe0, 0xe0, 0xe0);
 
-    /** Luminance above this is "light" — will be darkened when background is light */
+    /** Luminance above this is "light" - will be darkened when background is light */
     private static final double LIGHT_THRESHOLD = 0.55;
-    /** Luminance below this is "dark" — will be lightened when background is dark */
+    /** Luminance below this is "dark" - will be lightened when background is dark */
     private static final double DARK_THRESHOLD = 0.45;
 
     /** ANSI base colors (index 30–37 are foreground, 90–97 are bright) */

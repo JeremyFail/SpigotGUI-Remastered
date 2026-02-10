@@ -18,11 +18,23 @@
     </properties>
 
     <dependencies>
-        <!-- JTattoo Look and Feel (themes) -->
+        <!-- FlatLaf: flat Look and Feel (Light, Dark, IntelliJ, Darcula, macOS) -->
         <dependency>
-            <groupId>com.jtattoo</groupId>
-            <artifactId>JTattoo</artifactId>
-            <version>1.6.11</version>
+            <groupId>com.formdev</groupId>
+            <artifactId>flatlaf</artifactId>
+            <version>3.6.1</version>
+        </dependency>
+        <!-- FlatLaf IntelliJ Themes Pack (Arc, One Dark, Dracula, etc.) -->
+        <dependency>
+            <groupId>com.formdev</groupId>
+            <artifactId>flatlaf-intellij-themes</artifactId>
+            <version>3.6.1</version>
+        </dependency>
+        <!-- FlatLaf Extras: FlatSVGIcon for SVG icons -->
+        <dependency>
+            <groupId>com.formdev</groupId>
+            <artifactId>flatlaf-extras</artifactId>
+            <version>3.6.1</version>
         </dependency>
         <!-- RSyntaxTextArea: syntax highlighting, code folding, improved text editor -->
         <dependency>
@@ -89,7 +101,7 @@
                     </archive>
                 </configuration>
             </plugin>
-            <!-- Build a single JAR with all dependencies (JTattoo, RSyntaxTextArea) included -->
+            <!-- Build a single JAR with all dependencies (FlatLaf, RSyntaxTextArea, etc.) included -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
