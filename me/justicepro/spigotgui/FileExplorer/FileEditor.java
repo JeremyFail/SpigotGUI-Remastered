@@ -264,7 +264,6 @@ public class FileEditor extends JFrame {
 	 */
 	private void applyTheme(String themeName) {
 		if (themeName == null || themeName.isEmpty()) themeName = "default";
-		String path = "/org/fife/ui/rsyntaxtextarea/themes/" + themeName + ".xml";
 		try {
 			InputStream in = RSyntaxTextArea.class.getResourceAsStream("themes/" + themeName + ".xml");
 			if (in != null) {
@@ -302,8 +301,17 @@ public class FileEditor extends JFrame {
 			case "yaml":
 				textArea.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_YAML);
 				break;
+			case "css":
+				textArea.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_CSS);
+				break;
 			case "js":
 				textArea.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_JAVASCRIPT);
+				break;
+			case "php":
+				textArea.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_PHP);
+				break;
+			case "sql":
+				textArea.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_SQL);
 				break;
 			case "csv":
 				textArea.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_CSV);
