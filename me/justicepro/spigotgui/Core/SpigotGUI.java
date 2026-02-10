@@ -885,7 +885,7 @@ public class SpigotGUI extends JFrame {
 		panel_1.setLayout(gl_panel_1);
 
 		// Resources tab: memory/CPU graph and stats (after Players, before Settings)
-		resourcesPanel = new ResourcesPanel(server, serverSettings);
+		resourcesPanel = new ResourcesPanel(serverSettings);
 		resourcesPanel.startPolling();
 		tabbedPane.addTab("Resources", null, resourcesPanel, null);
 

@@ -24,7 +24,6 @@ public class ResourcesPanel extends JPanel {
     private static final int POLL_INTERVAL_MS = 1500;
     private static final long BYTES_PER_MB = 1024 * 1024;
 
-    private final Server server;
     private final int configuredHeapMaxMb;
     private final int configuredHeapMinMb;
     /** Server JAR path for matching process when shell PID is not available (e.g. Windows Java 8). */
@@ -44,8 +43,7 @@ public class ResourcesPanel extends JPanel {
     private SystemInfo systemInfo;
     private OperatingSystem os;
 
-    public ResourcesPanel(Server server, ServerSettings serverSettings) {
-        this.server = server;
+    public ResourcesPanel(ServerSettings serverSettings) {
         Object maxRam = serverSettings != null ? serverSettings.getMaxRam() : 1024;
         Object minRam = serverSettings != null ? serverSettings.getMinRam() : 1024;
         this.configuredHeapMaxMb = toIntMb(maxRam);
@@ -61,23 +59,24 @@ public class ResourcesPanel extends JPanel {
         statsSection.setLayout(new BoxLayout(statsSection, BoxLayout.Y_AXIS));
         statsSection.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        lblCpu = new JLabel("CPU: —%");
+        lblCpu = new JLabel("CPU: 0%");
+        lblCpu.setMinimumSize(new Dimension(lblCpu.getFontMetrics(lblCpu.getFont()).stringWidth("CPU: 100.0%") + 8, lblCpu.getPreferredSize().height));
         lblCpu.setFont(lblCpu.getFont().deriveFont(Font.PLAIN));
         lblCpu.setAlignmentX(Component.LEFT_ALIGNMENT);
-        lblMemoryUse = new JLabel("Memory use: — mb (—% free)");
+        lblMemoryUse = new JLabel("Memory use: 0 mb (100% free)");
         lblMemoryUse.setFont(lblMemoryUse.getFont().deriveFont(Font.PLAIN));
         lblMemoryUse.setAlignmentX(Component.LEFT_ALIGNMENT);
         lblHeap = new JLabel("Heap (allocated): " + configuredHeapMinMb + "–" + configuredHeapMaxMb + " mb");
         lblHeap.setFont(lblHeap.getFont().deriveFont(Font.PLAIN));
         lblHeap.setAlignmentX(Component.LEFT_ALIGNMENT);
-        lblPlayers = new JLabel("Players: —");
+        lblPlayers = new JLabel("Players: 0");
         lblPlayers.setFont(lblPlayers.getFont().deriveFont(Font.PLAIN));
         lblPlayers.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        lblPid = new JLabel("PID: —");
+        lblPid = new JLabel("PID: N/A");
         lblPid.setFont(lblPid.getFont().deriveFont(Font.PLAIN));
         lblPid.setHorizontalAlignment(SwingConstants.RIGHT);
-        lblPid.setToolTipText("Process ID of the server JVM being monitored (— when not found or server offline).");
+        lblPid.setToolTipText("Process ID of the server JVM being monitored (- when not found or server offline).");
 
         statsSection.add(lblCpu);
         statsSection.add(Box.createVerticalStrut(4));
@@ -113,11 +112,11 @@ public class ResourcesPanel extends JPanel {
     }
 
     private void updateLabelsWhenOffline() {
-        lblCpu.setText("CPU: —%");
-        lblMemoryUse.setText("Memory use: — mb (—% free)");
+        lblCpu.setText("CPU: 0%");
+        lblMemoryUse.setText("Memory use: 0 mb (100% free)");
         lblHeap.setText("Heap (allocated): " + configuredHeapMinMb + "–" + configuredHeapMaxMb + " mb");
-        lblPlayers.setText("Players: 0 / —");
-        lblPid.setText("PID: —");
+        lblPlayers.setText("Players: 0");
+        lblPid.setText("PID: N/A");
     }
 
     /**
@@ -222,11 +221,11 @@ public class ResourcesPanel extends JPanel {
 
         OSProcess serverProcess = findServerProcess(currentServer);
         if (serverProcess == null) {
-            lblCpu.setText("CPU: —%");
-            lblMemoryUse.setText("Memory use: (server process not found)");
+            lblCpu.setText("CPU: Unknown (server process not found)");
+            lblMemoryUse.setText("Memory use: Unknown (server process not found)");
             lblHeap.setText("Heap (allocated): " + configuredHeapMinMb + "–" + configuredHeapMaxMb + " mb");
-            lblPlayers.setText("Players: 0 / —");
-            lblPid.setText("PID: —");
+            lblPlayers.setText("Players: Unknown (server process not found)");
+            lblPid.setText("PID: Unknown (server process not found)");
             return;
         }
 
@@ -253,7 +252,7 @@ public class ResourcesPanel extends JPanel {
         int playersCount = SpigotGUI.players != null ? SpigotGUI.players.size() : 0;
         String maxPlayersStr = SpigotGUI.getServerMaxPlayersStatic();
         int maxPlayers = parseMaxPlayers(maxPlayersStr);
-        lblPlayers.setText(maxPlayersStr != null ? "Players: " + playersCount + " / " + maxPlayersStr : "Players: " + playersCount + " / —");
+        lblPlayers.setText(maxPlayersStr != null ? "Players: " + playersCount + " / " + maxPlayersStr : "Players: " + playersCount + " / -");
         samples.add(new Sample(System.currentTimeMillis(), rssMb, cpuPercent, playersCount, maxPlayers));
         while (samples.size() > MAX_SAMPLES) {
             samples.remove(0);
@@ -309,6 +308,7 @@ public class ResourcesPanel extends JPanel {
             checkRam.addActionListener(e -> repaint());
             checkPlayers.addActionListener(e -> repaint());
             checkboxPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 2));
+            checkboxPanel.add(new JLabel("Show:"));
             checkboxPanel.add(checkCpu);
             checkboxPanel.add(checkRam);
             checkboxPanel.add(checkPlayers);
@@ -515,7 +515,7 @@ public class ResourcesPanel extends JPanel {
         }
 
         private void drawSeries(Graphics2D g2, int[] x, int[] y, int n, int gy0, int gh, Color fillColor, Color lineColor, float strokeWidth) {
-            int gx0 = graphLeft();
+            graphLeft();
             g2.setColor(fillColor);
             java.awt.Polygon poly = new java.awt.Polygon();
             poly.addPoint(x[0], gy0 + gh);
